@@ -1,0 +1,13 @@
+﻿# 风控规则配置（占位）
+
+risk_gate:
+  max_single_asset: 0.35
+  max_drawdown: 0.20
+  volatility_target:
+    min: 0.08
+    max: 0.18
+  emergency_cash_min: 0.15
+  high_risk_asset_toggle:
+    low: false
+    medium: true
+    high: true
