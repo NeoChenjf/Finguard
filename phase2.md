@@ -1,4 +1,5 @@
 ﻿# Phase 2 文档
+# Phase 2 文档
 
 ## 1. 二阶段总览
 - 目标：接入 SSE 流式接口并完成基础 LLM client 接入（Qwen OpenAI 兼容 API），支持结构化事件输出与 API Key 鉴权。
