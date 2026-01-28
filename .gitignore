@@ -8,3 +8,6 @@ build/
 .vcpkg/
 .vscode/
 tools/
+
+# Ignore local LLM config containing API keys
+finguard/config/llm.json
