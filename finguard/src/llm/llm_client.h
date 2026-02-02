@@ -24,6 +24,7 @@ struct LlmConfig {
     int timeout_ms = 30000;
     bool use_curl_fallback = false;
     std::string curl_path = "curl.exe";
+    std::string http_proxy;
 };
 
 // 流式结果（事件由 routes.cpp 组装为 SSE）

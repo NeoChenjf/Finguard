@@ -8,5 +8,5 @@
   "use_curl_fallback": true,
   "curl_path": "curl.exe",
   "http_proxy": "",
-  "notes": "Fill api_key with your provider key. Do NOT commit the real llm.json to the repository."
+  "notes": "Fill api_key with your provider key. http_proxy format: http://host:port. Do NOT commit the real llm.json to the repository."
 }

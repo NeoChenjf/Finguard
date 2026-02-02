@@ -1,0 +1,12 @@
+﻿{
+    "provider":  "qwen",
+    "api_base":  "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "api_key":  "sk-5bc9d624881c47279101ceb669e6d32c",
+    "model":  "qwen-plus",
+    "temperature":  0.7,
+    "timeout_ms":  30000,
+    "use_curl_fallback":  true,
+    "curl_path":  "curl.exe",
+    "http_proxy":  "",
+    "note":  "THIS FILE SHOULD NOT CONTAIN REAL KEYS WHEN COMMITTED. Use llm.json.example as template."
+}

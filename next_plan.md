@@ -1,72 +1,57 @@
-﻿# FinGuard — Phase2 可执行计划书
+# FinGuard — Phase 3 启动与交接计划（给下一位 Agent）
 
-## 概要
-
-- 目标：在保证审计与降级可控的前提下，修复 Drogon 直连 LLM 的网络问题，移除长期依赖的 `curl` fallback，并把排障与运行规范纳入 `workbook`。 
-- 时间窗口（建议）：小范围验证 1 周，修复与回归测试 1–2 周（视排障复杂度）。
-
-## 当前状态
-
-- 已完成：结构化 SSE、`X-API-Key` 鉴权、LLM client 的基本调用链、`curl` fallback 联调可用。
-- 阻塞：Drogon HttpClient 在 Windows 环境下与目标 LLM endpoint 建连失败（`BadServerAddress`）。
-
-## 目标与验收标准
-
-- 主要目标：使 Drogon HttpClient 能稳定直连 LLM（Qwen/OpenAI 兼容 endpoint），并在失败时使用可控的降级策略。
-- 验收标准（可量化）：
-  1. Drogon 直连对同一 endpoint 返回非 `BadServerAddress`（2xx/4xx/5xx 均可被识别为正常回环，不再为连接级别错误）。
-  2. `use_curl_fallback` 为配置开关，CI 能在开/关状态下通过相应断言。
-  3. 排查与解决步骤写入 `workbook/` 的相应规则文件，并保留变更日志。
-
-## 优先级任务清单（执行性）
-
-高优先级（P0）
-1. 注入 HTTP 代理配置并重试 Drogon 直连
-   - 动作：在 `config/llm.json` 增加 `http_proxy` 字段；在 LLM client 读取并设置到 Drogon 请求选项。
-   - 验收：直连成功或错误变更为可诊断的错误码（非 BadServerAddress）。
-2. 将 `curl_fallback` 设为显式配置（`use_curl_fallback: true/false`）并在事件中标注原因
-   - 动作：增加配置、日志与 SSE 中的 `warning` 字段。
-   - 验收：能在不改业务代码的前提下通过配置切换降级行为。
-
-中优先级（P1）
-3. 强制 IPv4 优先与 Host header/SNI 设置
-   - 动作：在请求构造中尝试设置 IPv4 socket/flags 或使用 IP 地址直连并设置 `Host` 请求头。
-   - 验收：BadServerAddress 消失或被替换为后端返回的明确错误。
-4. 启用 Drogon debug 日志并抓包定位（复现场景下）
-   - 动作：脚本化抓包与日志收集步骤，输出可供分析的 trace 文件。
-   - 验收：定位到失败阶段（DNS/TCP/TLS）并形成问题定位报告。
-
-低优先级（P2）
-5. 编写回放/断言测试并加入 CI
-   - 动作：在 CI 中加入一次构建→启动→POST 测试（切换 `use_curl_fallback` 的断言）。
-   - 验收：CI 测试在两种配置下给出预期结果并保存日志。
-
-## 任务分工（建议）
-- 技术负责人：TBD（建议由目前维护 `llm_client.cpp` 的开发者担任）。
-- 验收与 QA：TBD（建议由测试工程师执行 CI 与回归测试）。
-- 文档与规则录入：由 Agent（我）按 `workbook/README.md` 流程草拟并提交供人工复核。
-
-## 时间估算（建议）
-- P0 任务：1–3 天（视代理配置与重试复杂度）。
-- P1 任务：2–5 天（抓包与定位可能需多次迭代）。
-- P2 任务：1–3 天（CI 集成与断言脚本）。
-
-## 风险与缓解
-- 风险：定位网络栈差异可能需要系统层面或运维协助（如企业代理、网络策略）。
-- 缓解：保持 `curl_fallback` 可用，优先做最小改动验证（代理配置），避免一次性大面积改动。
-
-## 交付物（每项需在完成后在 `next_plan.md` 记录）
-1. 修复或明确定位报告（Drogon 直连问题）
-2. `config/llm.json` 更新（含 proxy、use_curl_fallback）
-3. CI 集成测试（断言开/关 curl fallback）
-4. `workbook/` 中新增/更新规则（诊断流程、抓包步骤、自动化脚本）
-
-## 合规与文档要求
-- 所有新增规则必须遵循 `workbook/README.md` 中的流程（YAML 元数据、去重规则、变更日志）。
-
-## 下一步请求（需要你的确认）
-1. 我先实现 P0 的 `http_proxy` 注入与 `use_curl_fallback` 配置开关，并提交 PR 吗？（需要你同意修改代码）
-2. 还是先由我把“后端运行与排查”脚本化（`tools/run_backend_check.ps1`、抓包脚本）并把规则草稿加入 `workbook`？（不修改业务代码）
+## 1. 核心阅读（启动前必看）
+1. **`phase2.md`**：记录了二阶段的最终完成状态与 P1 深度排查结论。
+2. **`学习文档/20260201/`**：包含《概念学习笔记》和《二阶段深度排查手册》，详细解释了 IPv6 路由、c-ares、SNI 等关键难题。
+3. **`llm.json`**：确认 `use_curl_fallback: true` 且 `api_key` 正确。
 
 ---
-更新记录：将原 `next_plan.md` 由交接说明改写为可操作的 Phase2 计划书，包含优先级任务、验收标准与交付物。 
+
+## 2. 当前项目状态（截至 2026-02-01）
+
+### ✅ 已完成（Phase 2 成果）
+- **SSE 流式接口**：`/api/v1/chat/stream` 已实现，支持结构化输出。
+- **鉴权机制**：`X-API-Key` 鉴权已生效，与服务端的 `api_key` 匹配。
+- **LLM 通信闭环**：通过 `curl` fallback 机制，已成功获取 Qwen 回复（268 tokens 验证通过）。
+- **环境清理**：`tools/temp/` 已清理，仅保留核心诊断总结 `P1_DIAGNOSTIC_PACKAGE_FOR_OPUS.md`。
+
+### ⚠️ 技术负债（P1 排查结果）
+- **Drogon HttpClient 直连失败**：根因为 c-ares 库优先返回不可达的 IPv6 地址，且 Drogon 不支持手动 IP 连接时设置 SNI。
+- **现状**：**接受 fallback 模式作为当前交付标准**。不需要在此问题上继续纠缠，直接推进 Phase 3。
+
+---
+
+## 3. Phase 3：风险规则引擎（下一阶段目标）
+
+**核心任务**：在 AI 回复返回给用户之前，插入一层“金融风险校验”。
+
+### A. 规则定义 (YAML)
+- 创建 `finguard/config/rules.yaml`。
+- 定义初始规则（例如）：
+  - `max_single_asset_percent`: 30%（单资产持仓限制）
+  - `forbidden_keywords`: ["博彩", "高杠杆"]（违禁词过滤）
+  - `risk_level_check`: 根据用户画像分级。
+
+### B. 核心代码职责
+- **`RuleEngine` 类**：负责加载 YAML，提供 `check_request()` 和 `check_response()` 接口。
+- **集成点**：在 `routes.cpp` 的流式处理循环中，每收到一个 token 或在最终发送前进行规则判定。
+
+### C. 验收标准
+1. 发送包含“博彩”字详的 Prompt，AI 回答应被拦截或触发 Warning。
+2. 提供非法持仓比例建议时，SSE 流中应出现 `warning` 类型的事件。
+
+---
+
+## 4. 明日的立即行动项
+1. **初始化配置**：在 `finguard/config/` 下创建初始的 `rules.yaml`。
+2. **骨架搭建**：创建 `finguard/src/risk/rule_engine.h/cpp`，实现基本的配置读取。
+3. **路由集成**：在 `/api/v1/chat/stream` 处理器中注入规则引擎的实例，先跑通一个简单的“全文拦截”逻辑。
+
+---
+
+## 5. 开发规范提醒
+- **日志**：所有规则触发必须留下 `LOG_INFO` 日志，并在 SSE 输出中携带 `warning`。
+- **构建**：每次修改 C++ 代码后，执行 `cmake --build build --config Debug`。
+- **验证**：使用 PowerShell 的 `Invoke-RestMethod` 或 `curl.exe` 验证流式输出。
+
+> “Phase 2 的技术难题已化作文档，带着这些经验，开启 Phase 3 的业务逻辑构建吧。”
