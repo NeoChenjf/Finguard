@@ -8,6 +8,8 @@
 #include <string>
 
 #include "llm/llm_client.h"
+#include "risk/profile_store.h"
+#include "risk/rule_engine.h"
 
 namespace finguard {
 
@@ -70,6 +72,52 @@ void setup_routes() {
     // 指定该路由仅支持 POST 方法
     }, {Post});
 
+    // 问卷档案写入
+    // 注册 POST /api/v1/profile/upsert 路由处理器
+    app().registerHandler("/api/v1/profile/upsert",
+        [](const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&cb) {
+            // 从请求头读取用户账号
+            const auto user_id = req ? req->getHeader("X-User-Id") : "";
+            // 用户账号必填
+            if (user_id.empty()) {
+                Json::Value body;
+                body["error"] = "missing_user_id";
+                auto resp = HttpResponse::newHttpJsonResponse(body);
+                resp->setStatusCode(k400BadRequest);
+                cb(resp);
+                return;
+            }
+
+            // 解析问卷 JSON
+            auto json = req ? req->getJsonObject() : nullptr;
+            if (!json || !json->isMember("questionnaire") || !(*json)["questionnaire"].isObject()) {
+                Json::Value body;
+                body["error"] = "missing_questionnaire";
+                auto resp = HttpResponse::newHttpJsonResponse(body);
+                resp->setStatusCode(k400BadRequest);
+                cb(resp);
+                return;
+            }
+
+            std::string error;
+            if (!risk::upsert_profile(user_id, (*json)["questionnaire"], &error)) {
+                Json::Value body;
+                body["error"] = "profile_upsert_failed";
+                body["detail"] = error;
+                auto resp = HttpResponse::newHttpJsonResponse(body);
+                resp->setStatusCode(k500InternalServerError);
+                cb(resp);
+                return;
+            }
+
+            Json::Value body;
+            body["status"] = "ok";
+            body["user_id"] = user_id;
+            auto resp = HttpResponse::newHttpJsonResponse(body);
+            cb(resp);
+        },
+        {Post});
+
     // 流式问答（SSE）
     // 注册 POST /api/v1/chat/stream 路由处理器
     app().registerHandler("/api/v1/chat/stream",
@@ -87,6 +135,20 @@ void setup_routes() {
                     prompt = (*json)["prompt"].asString();
                 }
             }
+
+            // 读取用户档案（问卷）
+            Json::Value questionnaire;
+            std::string profile_error;
+            const auto user_id = req ? req->getHeader("X-User-Id") : "";
+            const bool has_profile = !user_id.empty() && risk::load_profile(user_id, &questionnaire, &profile_error);
+
+            // 加载规则引擎
+            risk::RuleEngine rule_engine;
+            std::string rules_error;
+            rule_engine.load_config(&rules_error);
+
+            // 规则引擎检查（强规则）
+            auto rule_result = rule_engine.check_request(prompt, questionnaire);
 
             // 创建 LLM 客户端
             llm::LlmClient client;
@@ -142,6 +204,19 @@ void setup_routes() {
             }
             // 复制告警列表
             auto warnings = result.warnings;
+            // 附加规则引擎告警
+            warnings.insert(warnings.end(), rule_result.warnings.begin(), rule_result.warnings.end());
+            // 若档案缺失，记录一次告警
+            if (!has_profile) {
+                if (!profile_error.empty()) {
+                    warnings.push_back("profile_error:" + profile_error);
+                } else {
+                    warnings.push_back("profile_missing_or_unreadable");
+                }
+            }
+            if (!rules_error.empty()) {
+                warnings.push_back("rules_load_failed");
+            }
             // 若告警列表为空，则补一个默认值
             if (warnings.empty()) {
                 // 补默认告警标识
@@ -288,4 +363,3 @@ void setup_routes() {
 }
 
 }
-

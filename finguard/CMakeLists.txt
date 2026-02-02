@@ -20,6 +20,8 @@ find_package(spdlog CONFIG REQUIRED)        # 查找 spdlog 日志库
 add_executable(finguard
     src/main.cpp
     src/llm/llm_client.cpp
+    src/risk/profile_store.cpp
+    src/risk/rule_engine.cpp
     src/server/http_server.cpp
     src/server/routes.cpp
 )

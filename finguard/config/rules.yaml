@@ -1,13 +1,98 @@
-﻿# 风控规则配置（占位）
+﻿# 风险规则配置（Phase 3）
 
-risk_gate:
-  max_single_asset: 0.35
-  max_drawdown: 0.20
-  volatility_target:
-    min: 0.08
-    max: 0.18
-  emergency_cash_min: 0.15
-  high_risk_asset_toggle:
-    low: false
-    medium: true
-    high: true
+version: 1
+name: "守拙价值多元化基金理念"
+
+inputs:
+  required:
+    - age
+    - investor_profile  # novice | experienced | professional
+  optional:
+    - individual_stock_percent  # 0.0 - 1.0, 股票部分中个股占比
+    - custom_allocation  # 允许经验丰富/专业投资人自定义资产比例
+    - prompt_text
+    - response_text
+  questionnaire_required: true
+  identity:
+    header_user_id: "X-User-Id"
+  profile_storage:
+    type: "file"
+    path: "config/profiles.json"
+    db: "todo"
+  investor_profile_source: "self_declared"
+  profile_guidance:
+    experienced_definition: ">=5年经验且年化收益>=10%"
+    professional_definition: ">=10年经验且十年长期业绩跑赢标普500"
+  questionnaire_schema:
+    experience_level_options: ["novice", "experienced", "professional"]
+    experience_years_band_options: ["0-5", "5-10", "10+"]
+    annualized_return_band_options: ["0-10", "10-20", "20+"]
+    beat_sp500_10y_options: ["yes", "no"]
+
+allocation:
+  gold_percent: 0.10
+  bonds:
+    method: age_decade  # 债券占比 = 年龄十位数（个位清零）
+    default_age: 35  # 若缺少年龄，默认按 30-40 岁区间处理
+    etf: "TLT"
+    examples:
+      - "20-29 -> 0.20"
+      - "30-39 -> 0.30"
+      - "40-49 -> 0.40"
+  equities:
+    index_allocation:
+      etfs:
+        us: "VOO"
+        china_a: "沪深300"
+        china_hk: "恒生指数"
+      ratios:
+        china_to_us: [1, 4]
+        hk_to_a: [1, 3]
+        derived: {china_hk: 1, china_a: 3, us: 16}
+    individual_stock:
+      profile_limits:
+        novice:
+          allowed: false
+          max_percent: 0.0
+        experienced:
+          allowed: true
+          max_percent: 0.5
+          requirements: ">=5年经验且年化收益>=10%"
+          custom_allocation_allowed: true
+        professional:
+          allowed: true
+          max_percent: null  # 不设上限
+          requirements: ">=10年经验且十年长期业绩跑赢标普500"
+          custom_allocation_allowed: true
+
+risk_limits:
+  min_single_asset_percent: 0.025
+
+stock_selection:
+  net_profit_cagr:
+    window_years: 5
+    formula: "CAGR = (avg_np_recent3 / avg_np_5y_ago3)^(1/5) - 1"
+  peg_max: 2.0
+  debt_ratio_max: 0.50
+  cash_flow_trend: "long_term_upward"
+  roe_min: 0.20
+  qualitative:
+    - "good_company_good_price"
+    - "honest_management"
+
+warnings:
+  keyword_rules:
+    forbidden_keywords:
+      - "博彩"
+      - "高杠杆"
+      - "ST股票"
+      - "ST"
+      - "期货"
+      - "卖空"
+      - "做空"
+      - "期权"
+      - "融资融券"
+      - "合约"
+  include_trigger_terms: true
+  include_reason: true
+  message_template: "风险提示：检测到高风险或复杂交易相关内容{terms}。AI 只能提供参考，无法替你决定，请为自己的资产深思熟虑并理性评估风险承受能力。"

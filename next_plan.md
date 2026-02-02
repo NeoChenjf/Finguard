@@ -1,57 +1,177 @@
-# FinGuard — Phase 3 启动与交接计划（给下一位 Agent）
+﻿# FinGuard — Phase 3 交接文档（任何 Agent 可无缝接手）
 
-## 1. 核心阅读（启动前必看）
-1. **`phase2.md`**：记录了二阶段的最终完成状态与 P1 深度排查结论。
-2. **`学习文档/20260201/`**：包含《概念学习笔记》和《二阶段深度排查手册》，详细解释了 IPv6 路由、c-ares、SNI 等关键难题。
-3. **`llm.json`**：确认 `use_curl_fallback: true` 且 `api_key` 正确。
+本文档旨在让新接手的 Agent 在**不依赖上下文**的情况下，像“老员工”一样继续推进 Phase 3。
 
 ---
 
-## 2. 当前项目状态（截至 2026-02-01）
-
-### ✅ 已完成（Phase 2 成果）
-- **SSE 流式接口**：`/api/v1/chat/stream` 已实现，支持结构化输出。
-- **鉴权机制**：`X-API-Key` 鉴权已生效，与服务端的 `api_key` 匹配。
-- **LLM 通信闭环**：通过 `curl` fallback 机制，已成功获取 Qwen 回复（268 tokens 验证通过）。
-- **环境清理**：`tools/temp/` 已清理，仅保留核心诊断总结 `P1_DIAGNOSTIC_PACKAGE_FOR_OPUS.md`。
-
-### ⚠️ 技术负债（P1 排查结果）
-- **Drogon HttpClient 直连失败**：根因为 c-ares 库优先返回不可达的 IPv6 地址，且 Drogon 不支持手动 IP 连接时设置 SNI。
-- **现状**：**接受 fallback 模式作为当前交付标准**。不需要在此问题上继续纠缠，直接推进 Phase 3。
+## 0. 快速入口（必读 5 分钟）
+1. `phase2.md`：Phase 2 已完成内容 + P1 深度排查结论（Drogon IPv6 / SNI）。
+2. `守拙价值多元化基金理念.md`：资产配置与选股规则的业务来源（强规则基础）。
+3. `finguard/config/rules.yaml`：当前规则配置（关键词、画像、个股比例、警示模板等）。
+4. `phase3.md`：Phase 3 进展与日志。
+5. `学习文档/20260202/study.md`：教学内容与“教教我”默认更新规则。
 
 ---
 
-## 3. Phase 3：风险规则引擎（下一阶段目标）
+## 1. 当前项目状态（截至 2026-02-02）
+### 已稳定可用
+- SSE 接口 `/api/v1/chat/stream` 已实现，输出 token/cite/metric/warning/done。
+- `X-API-Key` 鉴权已生效，与 `config/llm.json` 的 api_key 匹配。
+- LLM 通过 curl fallback 通路可正常输出真实 Qwen 回复。
 
-**核心任务**：在 AI 回复返回给用户之前，插入一层“金融风险校验”。
+### Phase 3 已完成
+- 规则配置文件 `finguard/config/rules.yaml` 已按“守拙价值多元化基金理念”整理。
+- 问卷档案接口已新增：`POST /api/v1/profile/upsert`（Header: `X-User-Id`）。
+- 本地档案存储实现：`config/profiles.json`（文件存储，数据库为技术债务）。
+- RuleEngine 基础实现已接入 `/api/v1/chat/stream`（请求侧警示）。
 
-### A. 规则定义 (YAML)
-- 创建 `finguard/config/rules.yaml`。
-- 定义初始规则（例如）：
-  - `max_single_asset_percent`: 30%（单资产持仓限制）
-  - `forbidden_keywords`: ["博彩", "高杠杆"]（违禁词过滤）
-  - `risk_level_check`: 根据用户画像分级。
-
-### B. 核心代码职责
-- **`RuleEngine` 类**：负责加载 YAML，提供 `check_request()` 和 `check_response()` 接口。
-- **集成点**：在 `routes.cpp` 的流式处理循环中，每收到一个 token 或在最终发送前进行规则判定。
-
-### C. 验收标准
-1. 发送包含“博彩”字详的 Prompt，AI 回答应被拦截或触发 Warning。
-2. 提供非法持仓比例建议时，SSE 流中应出现 `warning` 类型的事件。
+### 仍需完成
+- `RuleEngine::check_response()`：响应侧规则（资产分配、选股指标等）。
+- 警示输出结构完善（更明确的原因 + 触发词）。
+- 验收脚本/命令标准化。
 
 ---
 
-## 4. 明日的立即行动项
-1. **初始化配置**：在 `finguard/config/` 下创建初始的 `rules.yaml`。
-2. **骨架搭建**：创建 `finguard/src/risk/rule_engine.h/cpp`，实现基本的配置读取。
-3. **路由集成**：在 `/api/v1/chat/stream` 处理器中注入规则引擎的实例，先跑通一个简单的“全文拦截”逻辑。
+## 2. 技术债务（必须知晓）
+- Drogon HttpClient 直连失败（IPv6 + SNI 问题）
+  - 结论：**接受 curl fallback 作为当前交付标准**。
+  - 参考：`phase2.md` + `学习文档/20260201/`。
 
 ---
 
-## 5. 开发规范提醒
-- **日志**：所有规则触发必须留下 `LOG_INFO` 日志，并在 SSE 输出中携带 `warning`。
-- **构建**：每次修改 C++ 代码后，执行 `cmake --build build --config Debug`。
-- **验证**：使用 PowerShell 的 `Invoke-RestMethod` 或 `curl.exe` 验证流式输出。
+## 3. 关键规则与业务原则（强规则 + 弱 LLM）
+### 业务立场
+- LLM 只做“公司分析与解释文本”，不负责决定配置。
+- 配置与风控规则由后端 RuleEngine 决定。
 
-> “Phase 2 的技术难题已化作文档，带着这些经验，开启 Phase 3 的业务逻辑构建吧。”
+### 规则来源
+- `守拙价值多元化基金理念.md`
+
+### 规则配置文件
+- `finguard/config/rules.yaml`
+  - 关键词触发：博彩、高杠杆、ST、期货、做空等。
+  - 画像与个股比例限制：novice/experienced/professional。
+  - 默认年龄：35（对应 30–40 岁区间）。
+  - warning 模板（含触发词提示）。
+
+---
+
+## 4. 已新增代码与入口
+### 新增文件
+- `finguard/src/risk/profile_store.h`
+- `finguard/src/risk/profile_store.cpp`
+- `finguard/src/risk/rule_engine.h`
+- `finguard/src/risk/rule_engine.cpp`
+
+### 相关集成点
+- `finguard/src/server/routes.cpp`
+  - 新增接口：`/api/v1/profile/upsert`
+  - `/api/v1/chat/stream` 中调用 RuleEngine 并合并 warnings
+
+### 构建入口
+- `finguard/CMakeLists.txt` 已加入 `profile_store.cpp` 和 `rule_engine.cpp`
+
+---
+
+## 5. 关键接口说明
+### 5.1 问卷写入接口（已实现）
+- `POST /api/v1/profile/upsert`
+- Header: `X-User-Id: <账号>`
+- Body:
+```json
+{
+  "questionnaire": {
+    "age": 35,
+    "investor_profile": "experienced",
+    "experience_years_band": "5-10",
+    "annualized_return_band": "10-20",
+    "beat_sp500_10y": "no",
+    "individual_stock_percent": 0.30
+  }
+}
+```
+- 存储：`config/profiles.json`
+
+### 5.2 SSE 流式问答（已实现 + 接入规则）
+- `POST /api/v1/chat/stream`
+- Header: `X-API-Key`, `X-User-Id`
+- Body:
+```json
+{
+  "prompt": "......"
+}
+```
+- 规则引擎会：
+  - 检查关键词
+  - 检查画像与个股比例
+  - 若缺失档案会输出 warning
+
+---
+
+## 6. 当前规则引擎状态
+### 已完成
+- `RuleEngine::load_config()`：轻量 YAML 解析（只读必要字段）。
+- `RuleEngine::check_request()`：关键词、画像与个股比例检查。
+
+### 计划完善
+- `RuleEngine::check_response()`：
+  - 资产分配计算与校验
+  - 选股指标（PEG、负债率、ROE、现金流）
+  - 输出结构化原因
+
+---
+
+## 7. 验收建议（建议写成脚本）
+1. 写入问卷
+```powershell
+curl.exe -X POST "http://localhost:8080/api/v1/profile/upsert" ^
+  -H "Content-Type: application/json" ^
+  -H "X-User-Id: NeoChen" ^
+  -d "{\"questionnaire\":{\"age\":35,\"investor_profile\":\"experienced\",\"individual_stock_percent\":0.3}}"
+```
+
+2. 触发关键词 warning
+```powershell
+curl.exe -X POST "http://localhost:8080/api/v1/chat/stream" ^
+  -H "Content-Type: application/json" ^
+  -H "X-API-Key: <api_key>" ^
+  -H "X-User-Id: NeoChen" ^
+  -d "{\"prompt\":\"我想用高杠杆做空\"}"
+```
+
+---
+
+## 8. 开发规范（必须遵守）
+- 新功能优先“新增函数/头文件 + 引入”，避免大改旧代码。
+- “教教我”默认更新 `学习文档/20260202/study.md`。
+- 关键规则变更需同步更新 `phase3.md` 与 `next_plan.md`。
+
+---
+
+## 9. 接手后的下一步路线图
+1. 实现 `check_response()` 并完善 warning 输出结构。
+2. 统一 warning 结构（含触发词 + 原因 + 理性提示）。
+3. 若需要个性化解释，可选“档案摘要注入 system prompt”。
+
+---
+
+## 10. 需要提醒用户的事情（Agent 提示清单）
+- 先阅读 `学习文档/20260202/明日前置学习路线.md`，确认理解新增代码的学习路径。
+- 确认是否要继续完善 `check_response()`（资产分配 + 个股指标）或先补验收脚本。
+- 若要个性化解释，讨论是否采用“档案摘要注入 system prompt”。
+
+---
+
+## 11. 参考索引（路径清单）
+- 规则配置：`finguard/config/rules.yaml`
+- 问卷存储：`config/profiles.json`
+- 规则引擎：`finguard/src/risk/rule_engine.*`
+- 档案存储：`finguard/src/risk/profile_store.*`
+- SSE 路由：`finguard/src/server/routes.cpp`
+- 业务理念：`守拙价值多元化基金理念.md`
+- Phase 3 进度：`phase3.md`
+
+---
+
+## 11. 交接总结（一句话）
+Phase 3 已完成“问卷档案 + 规则引擎请求侧接入”，下一步是补齐响应侧规则与标准化验收。
