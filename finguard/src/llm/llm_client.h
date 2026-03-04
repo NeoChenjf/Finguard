@@ -32,6 +32,7 @@ struct StreamResult {
     std::vector<std::string> tokens;
     std::vector<std::string> cites;
     std::vector<std::string> warnings;
+    std::string full_text;
     LlmMetrics metrics;
     bool degraded = false;
     std::string error;
@@ -44,5 +45,8 @@ public:
     // 发起一次请求并返回拆分后的 token（当前实现为非真正流式）
     StreamResult stream_chat(const std::string &prompt) const;
 };
+
+// 使 LLM 配置缓存立即失效（POST /settings 后调用）
+void invalidate_llm_config_cache();
 
 }

@@ -21,18 +21,70 @@
 
 // 引入文件系统
 #include <filesystem>
+// 引入字符处理
+#include <cctype>
+// 引入智能指针
+#include <memory>
+// 引入 tuple
+#include <tuple>
 // 引入文件读写
 #include <fstream>
 // 引入字符串流
 #include <sstream>
 // 引入 C 标准 IO
 #include <cstdio>
+#include <mutex>
+#include <thread>
+#include <cstdlib>
+
+#include "util/circuit_breaker.h"
+#include "util/metrics_registry.h"
+#include "util/reliability_config.h"
+#include "util/token_bucket.h"
 
 // 命名空间开始
 namespace finguard::llm {
 
 // 匿名命名空间开始
 namespace {
+
+std::string trim_copy(const std::string &value);
+
+std::string get_env_trimmed(const char *name) {
+    const char *raw = std::getenv(name);
+    if (!raw) {
+        return "";
+    }
+    return trim_copy(std::string(raw));
+}
+
+bool parse_env_bool(const std::string &value, bool fallback) {
+    if (value.empty()) {
+        return fallback;
+    }
+    std::string v = value;
+    for (auto &c : v) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    if (v == "1" || v == "true" || v == "yes" || v == "y" || v == "on") {
+        return true;
+    }
+    if (v == "0" || v == "false" || v == "no" || v == "n" || v == "off") {
+        return false;
+    }
+    return fallback;
+}
+
+int parse_env_int(const std::string &value, int fallback) {
+    if (value.empty()) {
+        return fallback;
+    }
+    try {
+        return std::stoi(value);
+    } catch (const std::exception &) {
+        return fallback;
+    }
+}
 
 // 默认配置（当 llm.json 缺失时使用）
 LlmConfig default_config() {
@@ -74,6 +126,20 @@ std::string truncate_copy(const std::string &value, std::size_t max_len) {
     }
     // 否则截断并追加省略号
     return value.substr(0, max_len) + "...";
+}
+
+std::string model_family(const std::string &model) {
+    std::string out = model;
+    for (auto &c : out) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    if (out.find("qwen") != std::string::npos) {
+        return "qwen";
+    }
+    if (out.find("deepseek") != std::string::npos) {
+        return "deepseek";
+    }
+    return "default";
 }
 
 // 将 api_base 拆分为 host / path 前缀 / 端口 / 是否 SSL
@@ -443,66 +509,85 @@ bool curl_fallback_request(const LlmConfig &cfg,
 // 结束匿名命名空间
 }
 
+// ── P6: 全局 LLM 配置缓存（供 invalidate 使用）──
+static std::mutex g_llm_cfg_mtx;
+static LlmConfig g_llm_cfg;
+static std::chrono::steady_clock::time_point g_llm_cfg_loaded_at{};
+
+void invalidate_llm_config_cache() {
+    std::lock_guard<std::mutex> lock(g_llm_cfg_mtx);
+    g_llm_cfg_loaded_at = std::chrono::steady_clock::time_point{};
+}
+
 // 读取配置文件
 LlmConfig LlmClient::load_config() const {
     // 先使用默认配置
     LlmConfig cfg = default_config();
     // 配置文件路径
     const std::filesystem::path path = std::filesystem::current_path() / "config" / "llm.json";
-    // 若文件不存在则返回默认配置
-    if (!std::filesystem::exists(path)) {
-        return cfg;
+
+    // 读取 JSON 配置（若文件缺失/不可读/解析失败，则保留默认值继续走 env 覆盖）
+    if (std::filesystem::exists(path)) {
+        std::ifstream in(path);
+        if (in) {
+            nlohmann::json doc;
+            try {
+                in >> doc;
+                if (doc.contains("api_base") && doc["api_base"].is_string()) {
+                    cfg.api_base = trim_copy(doc["api_base"].get<std::string>());
+                }
+                if (doc.contains("api_key") && doc["api_key"].is_string()) {
+                    cfg.api_key = trim_copy(doc["api_key"].get<std::string>());
+                }
+                if (doc.contains("model") && doc["model"].is_string()) {
+                    cfg.model = trim_copy(doc["model"].get<std::string>());
+                }
+                if (doc.contains("temperature") && doc["temperature"].is_number()) {
+                    cfg.temperature = doc["temperature"].get<double>();
+                }
+                if (doc.contains("timeout_ms") && doc["timeout_ms"].is_number_integer()) {
+                    cfg.timeout_ms = doc["timeout_ms"].get<int>();
+                }
+                if (doc.contains("use_curl_fallback") && doc["use_curl_fallback"].is_boolean()) {
+                    cfg.use_curl_fallback = doc["use_curl_fallback"].get<bool>();
+                }
+                if (doc.contains("curl_path") && doc["curl_path"].is_string()) {
+                    cfg.curl_path = trim_copy(doc["curl_path"].get<std::string>());
+                }
+                if (doc.contains("http_proxy") && doc["http_proxy"].is_string()) {
+                    cfg.http_proxy = trim_copy(doc["http_proxy"].get<std::string>());
+                }
+            } catch (const std::exception &) {
+                // ignore parse errors; keep defaults
+            }
+        }
     }
 
-    // 读取 JSON 配置
-    std::ifstream in(path);
-    // 打开失败则返回默认配置
-    if (!in) {
-        return cfg;
+    // 环境变量覆盖（用于本地验收/调试，避免直接修改 llm.json）
+    // 注意：不要在日志中打印真实 key
+    const auto env_api_base = get_env_trimmed("FINGUARD_LLM_API_BASE");
+    if (!env_api_base.empty()) {
+        cfg.api_base = env_api_base;
     }
-
-    // JSON 文档对象
-    nlohmann::json doc;
-    try {
-        // 解析 JSON
-        in >> doc;
-    } catch (const std::exception &) {
-        // 解析失败返回默认配置
-        return cfg;
+    const auto env_api_key = get_env_trimmed("FINGUARD_LLM_API_KEY");
+    if (!env_api_key.empty()) {
+        cfg.api_key = env_api_key;
     }
-
-    // 允许部分字段缺失，使用默认值兜底
-    if (doc.contains("api_base") && doc["api_base"].is_string()) {
-        // 设置 api_base
-        cfg.api_base = trim_copy(doc["api_base"].get<std::string>());
+    const auto env_model = get_env_trimmed("FINGUARD_LLM_MODEL");
+    if (!env_model.empty()) {
+        cfg.model = env_model;
     }
-    if (doc.contains("api_key") && doc["api_key"].is_string()) {
-        // 设置 api_key
-        cfg.api_key = trim_copy(doc["api_key"].get<std::string>());
+    const auto env_timeout = get_env_trimmed("FINGUARD_LLM_TIMEOUT_MS");
+    if (!env_timeout.empty()) {
+        cfg.timeout_ms = parse_env_int(env_timeout, cfg.timeout_ms);
     }
-    if (doc.contains("model") && doc["model"].is_string()) {
-        // 设置 model
-        cfg.model = trim_copy(doc["model"].get<std::string>());
+    const auto env_proxy = get_env_trimmed("FINGUARD_LLM_HTTP_PROXY");
+    if (!env_proxy.empty()) {
+        cfg.http_proxy = env_proxy;
     }
-    if (doc.contains("temperature") && doc["temperature"].is_number()) {
-        // 设置 temperature
-        cfg.temperature = doc["temperature"].get<double>();
-    }
-    if (doc.contains("timeout_ms") && doc["timeout_ms"].is_number_integer()) {
-        // 设置 timeout_ms
-        cfg.timeout_ms = doc["timeout_ms"].get<int>();
-    }
-    if (doc.contains("use_curl_fallback") && doc["use_curl_fallback"].is_boolean()) {
-        // 设置是否启用降级
-        cfg.use_curl_fallback = doc["use_curl_fallback"].get<bool>();
-    }
-    if (doc.contains("curl_path") && doc["curl_path"].is_string()) {
-        // 设置 curl 路径
-        cfg.curl_path = trim_copy(doc["curl_path"].get<std::string>());
-    }
-    if (doc.contains("http_proxy") && doc["http_proxy"].is_string()) {
-        // 设置代理
-        cfg.http_proxy = trim_copy(doc["http_proxy"].get<std::string>());
+    const auto env_use_curl = get_env_trimmed("FINGUARD_LLM_USE_CURL_FALLBACK");
+    if (!env_use_curl.empty()) {
+        cfg.use_curl_fallback = parse_env_bool(env_use_curl, cfg.use_curl_fallback);
     }
 
     // 返回最终配置
@@ -513,8 +598,54 @@ LlmConfig LlmClient::load_config() const {
 StreamResult LlmClient::stream_chat(const std::string &prompt) const {
     // 初始化结果结构
     StreamResult result;
-    // 读取配置
-    LlmConfig cfg = load_config();
+    // 读取配置 (P5: use cached LLM config, P6: use global cache for invalidation support)
+    LlmConfig cfg;
+    {
+        std::lock_guard<std::mutex> lock(g_llm_cfg_mtx);
+        const auto now = std::chrono::steady_clock::now();
+        if (now - g_llm_cfg_loaded_at > std::chrono::seconds(5)) {
+            g_llm_cfg = load_config();
+            g_llm_cfg_loaded_at = now;
+        }
+        cfg = g_llm_cfg;
+    }
+    const auto family = model_family(cfg.model);
+
+    // P5 perf: use cached config loaders (5s TTL) instead of per-request file I/O
+    const auto rate_cfg = util::cached_rate_limit_config();
+    const auto timeout_cfg = util::cached_timeout_config();
+    const auto cb_cfg = util::cached_circuit_breaker_config();
+
+    static util::TokenBucket model_bucket;
+    static std::unique_ptr<util::CircuitBreaker> circuit_breaker;
+    static util::CircuitBreakerConfig last_cb_cfg;
+    if (!circuit_breaker || last_cb_cfg.error_rate_threshold != cb_cfg.error_rate_threshold
+        || last_cb_cfg.window_seconds != cb_cfg.window_seconds
+        || last_cb_cfg.half_open_max_trials != cb_cfg.half_open_max_trials
+        || last_cb_cfg.min_samples != cb_cfg.min_samples) {
+        circuit_breaker = std::make_unique<util::CircuitBreaker>(cb_cfg);
+        last_cb_cfg = cb_cfg;
+    }
+
+    const auto model_it = rate_cfg.model_limits.find(family);
+    const auto model_limit = (model_it != rate_cfg.model_limits.end()) ? model_it->second : util::RateLimitModelConfig{};
+    if (!model_bucket.allow("model:" + family, model_limit.rate_rps, model_limit.capacity)) {
+        util::global_metrics().record_rate_limit_reject();
+        result.degraded = true;
+        result.error = "model_rate_limited";
+        result.warnings.push_back("model_rate_limited");
+        result.full_text = "FinGuard fallback response due to model rate limiting.";
+        return result;
+    }
+
+    if (!circuit_breaker->allow("model:" + family)) {
+        util::global_metrics().record_circuit_breaker_trip();
+        result.degraded = true;
+        result.error = "circuit_breaker_open";
+        result.warnings.push_back("circuit_breaker_open");
+        result.full_text = "FinGuard fallback response due to circuit breaker.";
+        return result;
+    }
 
     // 没有 API Key 时直接走降级逻辑
     if (cfg.api_key.empty()) {
@@ -533,6 +664,20 @@ StreamResult LlmClient::stream_chat(const std::string &prompt) const {
             message = "FinGuard mock stream response for: " + prompt;
         }
     } else {
+        int timeout_ms = timeout_cfg.external_call_timeout_ms;
+        int max_retries = timeout_cfg.external_call_max_retries;
+        const auto route_it = timeout_cfg.route_overrides.find("chat_stream");
+        if (route_it != timeout_cfg.route_overrides.end()) {
+            timeout_ms = route_it->second.timeout_ms;
+            max_retries = route_it->second.max_retries;
+        }
+        const auto model_timeout_it = timeout_cfg.model_overrides.find(family);
+        if (model_timeout_it != timeout_cfg.model_overrides.end()) {
+            timeout_ms = model_timeout_it->second.timeout_ms;
+            max_retries = model_timeout_it->second.max_retries;
+        }
+        cfg.timeout_ms = timeout_ms;
+
         // 构造请求 JSON
         nlohmann::json body;
         // 设置模型
@@ -541,9 +686,33 @@ StreamResult LlmClient::stream_chat(const std::string &prompt) const {
         body["temperature"] = cfg.temperature;
         // 禁用真正流式
         body["stream"] = false;
+        // 强制模板要求的 System Prompt
+        const std::string system_prompt = 
+            "You are FinGuard AI investment analysis assistant. "
+            "When analyzing a company, you MUST follow this exact template structure:\n\n"
+            "【公司信息】\nCompany name / Stock code / Industry / Main products\n\n"
+            "【财务状况（定量指标，含好价格判断）】\n"
+            "Include: 5-year CAGR, ROE, Debt ratio, PEG, Cash flow trend. "
+            "ALWAYS use explicit numbers with labels (e.g., 'ROE 18%', 'PEG 2.3', 'Debt ratio 45%', '5-year CAGR 12%')\n\n"
+            "【商业模式与护城河】\nBusiness model / Competitive advantage / Moat strength\n\n"
+            "【管理层结构与风格】\nManagement stability / Governance / Integrity signals\n\n"
+            "【优点与风险点】\nList 3 main advantages / List 3 main risks\n\n"
+            "【预期收益（模型估算，必须注明不确定性）】\n"
+            "Formula: Expected = (ROE * (1 + CAGR_5y) + 1) * (PE_long_term / PE_current) - 1\n"
+            "MUST include specific numerical values (e.g., '(0.18 * 1.12 + 1) * (18 / 22) - 1 = 8.5%') and uncertainty range.\n\n"
+            "【结论（分析性总结）】\n1-3 key takeaways. NO allocation ratios, NO buy/sell signals, NO profit promises.\n\n"
+            "【合规与数据声明】\n"
+            "This analysis does NOT constitute investment advice and does NOT include allocation ratios or buy/sell signals. "
+            "Data from public sources may be outdated or inaccurate.\n\n"
+            "STRICT CONSTRAINTS: "
+            "1. NEVER recommend allocation percentages, positions, or trading actions. "
+            "2. NEVER give buy/sell signals or profit guarantees. "
+            "3. ALL financial metrics MUST show explicit numbers (e.g., 'ROE 18%' not just '18%'). "
+            "4. ALWAYS include both metric label and value. "
+            "5. Include uncertainty disclaimers in Expected Return section.";
         // 组装消息数组
         body["messages"] = nlohmann::json::array({
-            {{"role", "system"}, {"content", "You are FinGuard AI assistant."}},
+            {{"role", "system"}, {"content", system_prompt}},
             {{"role", "user"}, {"content", prompt.empty() ? "请输出一段示例流式回复" : prompt}}
         });
 
@@ -580,8 +749,11 @@ StreamResult LlmClient::stream_chat(const std::string &prompt) const {
                  << " port: " << info.port << " ssl: " << (info.use_ssl ? "true" : "false");
         
         // 创建 HttpClient
-        // 已知问题: c-ares DNS 解析可能返回 IPv6 地址, 在某些网络环境下导致连接失败
-        // 建议: 如果 Drogon 直连失败, 请在 llm.json 中设置 use_curl_fallback=true
+        // Note: per-request client creation is intentional — Drogon's sync
+        // sendRequest() serializes on a shared client, which degrades RPS
+        // when the backend (LLM/mock) has non-trivial latency. Creating
+        // a fresh client per request allows maximum concurrency via separate
+        // TCP connections.
         drogon::HttpClientPtr client;
         if (proxy.enabled) {
             client = drogon::HttpClient::newHttpClient(proxy.host, proxy.port, proxy.use_ssl);
@@ -620,14 +792,35 @@ StreamResult LlmClient::stream_chat(const std::string &prompt) const {
         LOG_INFO << "LLM request dispatch: api_base=" << cfg.api_base
                  << " timeout_sec=" << timeout_sec
                  << " use_proxy=" << (proxy.enabled ? "true" : "false");
-        // Sync request for minimal behavior and controllable errors.
-        auto [res, resp] = client->sendRequest(req, timeout_sec);
+        // Sync request with retry for minimal behavior and controllable errors.
+        drogon::ReqResult res = drogon::ReqResult::Ok;
+        drogon::HttpResponsePtr resp;
+        for (int attempt = 0; attempt <= max_retries; ++attempt) {
+            const auto attempt_start = std::chrono::steady_clock::now();
+            std::tie(res, resp) = client->sendRequest(req, timeout_sec);
+            const auto attempt_latency_ms =
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - attempt_start).count();
+            util::global_metrics().record_external_call_latency(attempt_latency_ms);
+            if (res == drogon::ReqResult::Ok && resp && resp->getStatusCode() == drogon::k200OK) {
+                break;
+            }
+            // 输出重试日志，便于验收“超时与重试次数可见”
+            LOG_WARN << "LLM attempt failed; attempt=" << attempt
+                     << " max_retries=" << max_retries
+                     << " req_result=" << drogon::to_string(res)
+                     << " http_status=" << (resp ? std::to_string(resp->getStatusCode()) : "none")
+                     << " attempt_latency_ms=" << attempt_latency_ms;
+            if (attempt < max_retries) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(timeout_cfg.external_call_backoff_ms));
+            }
+        }
 
         // 请求失败或无响应
         if (res != drogon::ReqResult::Ok || !resp) {
             result.degraded = true;
             result.error = "llm_request_failed";
             result.warnings.push_back("llm_request_failed");
+            circuit_breaker->record_failure("model:" + family);
             if (resp) {
                 result.warnings.push_back("llm_http_status_" + std::to_string(resp->getStatusCode()));
             } else {
@@ -656,6 +849,7 @@ StreamResult LlmClient::stream_chat(const std::string &prompt) const {
                     result.degraded = false;
                     result.warnings.clear();
                     result.warnings.push_back("curl_fallback_used");
+                    circuit_breaker->record_success("model:" + family);
                     LOG_WARN << "LLM fallback used: curl_fallback_used";
                 } else {
                     result.warnings.insert(result.warnings.end(), curl_warnings.begin(), curl_warnings.end());
@@ -676,6 +870,9 @@ StreamResult LlmClient::stream_chat(const std::string &prompt) const {
             }
             LOG_ERROR << "LLM bad status: status=" << resp->getStatusCode()
                       << " use_proxy=" << (proxy.enabled ? "true" : "false");
+            if (resp->getStatusCode() >= 500) {
+                circuit_breaker->record_failure("model:" + family);
+            }
             // 若允许使用 curl 降级
             if (cfg.use_curl_fallback) {
                 std::vector<std::string> curl_warnings;
@@ -683,6 +880,7 @@ StreamResult LlmClient::stream_chat(const std::string &prompt) const {
                     result.degraded = false;
                     result.warnings.clear();
                     result.warnings.push_back("curl_fallback_used");
+                    circuit_breaker->record_success("model:" + family);
                     LOG_WARN << "LLM fallback used: curl_fallback_used";
                 } else {
                     result.warnings.insert(result.warnings.end(), curl_warnings.begin(), curl_warnings.end());
@@ -700,11 +898,15 @@ StreamResult LlmClient::stream_chat(const std::string &prompt) const {
                 message = "FinGuard fallback response due to LLM parse failure.";
                 LOG_ERROR << "LLM parse failed.";
             } else {
+                circuit_breaker->record_success("model:" + family);
                 LOG_INFO << "LLM request succeeded: status=" << resp->getStatusCode()
                          << " use_proxy=" << (proxy.enabled ? "true" : "false");
             }
         }
     }
+
+    // 保存完整文本，供响应侧规则检查
+    result.full_text = message;
 
     // 将文本拆成 token（按空格），模拟流式输出
     std::istringstream iss(message);

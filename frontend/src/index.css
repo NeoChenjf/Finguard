@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* 打字机闪烁光标 */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.cursor-blink::after {
+  content: '▎';
+  animation: blink 1s step-end infinite;
+  color: #60a5fa;
+}

@@ -1,74 +1,116 @@
-﻿---
-title: 自动化操作约定
-tags: [automation]
-last_updated: 2026-01-27
+---
+title: 后端运维自动化
+tags: [automation, backend, finguard]
+last_updated: 2026-02-25
 source: workbook
-status: draft
+status: published
 ---
 
-# 自动化操作约定
+# 后端运维自动化
 
-目的
-- 确保在项目开发与调试过程中，后端服务的启动、检测与故障处理可被 agent 安全、可追溯地自动化。自动化以“可复现、可回滚、可追溯”为首要目标。
+本文件规定 finguard C++ 后端的启动、健康检查、验收与故障排查的标准操作流程。
 
-启动约定（后端）
-- 在检测到后端未运行时，优先在 `backend` 目录下尝试启动；确保当前工作目录为 `backend`，以避免导入路径或相对引用出错。
+---
 
-推荐启动命令（PowerShell）：
+## 1. 启动 finguard 后端
+
+### 1.1 Debug 构建启动
+
 ```powershell
-cd backend
-& ..\.venv\Scripts\Activate.ps1
-python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+# 确保已在项目根目录
+$p = Start-Process `
+  -FilePath 'd:\AI_Investment\finguard\build\Debug\finguard.exe' `
+  -WorkingDirectory 'd:\AI_Investment\finguard\build' `
+  -RedirectStandardOutput 'd:\AI_Investment\tools\temp\finguard_out.log' `
+  -RedirectStandardError 'd:\AI_Investment\tools\temp\finguard_err.log' `
+  -PassThru
+Write-Output "PID:$($p.Id)"
 ```
 
-注：`--reload` 仅用于开发阶段，生产环境应使用稳定部署流程。
+### 1.2 Release 构建启动
 
----
-
-### 示例规则：后端启动常见错误与修复（app 未定义）
-```yaml
----
-title: 后端启动常见错误与修复（app 未定义）
-tags: [automation, backend, diagnostics]
-last_updated: 2026-01-27
-source: 会话 2026-01-27 调试记录
-status: draft
----
+```powershell
+$p = Start-Process `
+  -FilePath 'd:\AI_Investment\finguard\build\Release\finguard.exe' `
+  -WorkingDirectory 'd:\AI_Investment\finguard\build' `
+  -RedirectStandardOutput 'd:\AI_Investment\tools\temp\finguard_out.log' `
+  -RedirectStandardError 'd:\AI_Investment\tools\temp\finguard_err.log' `
+  -PassThru
+Write-Output "PID:$($p.Id)"
 ```
 
-规则说明
-- 描述：当使用 `uvicorn` 启动后端时报错 `NameError: name 'app' is not defined` 或类似错误时，通常原因是启动命令的工作目录不正确或模块路径不一致，导致 `main:app` 无法被正确解析。
-- 适用场景：开发环境本地调试、虚拟环境已创建但未激活、存在相对导入的项目结构。
+### 1.3 前置准备
 
-解决步骤
-1. 确保在项目根的 `backend` 目录内执行启动命令：
-   ```powershell
-   cd backend
-   & ..\.venv\Scripts\Activate.ps1
-   python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
-   ```
-2. 若仍报 `app 未定义`：
-   - 检查 `main.py` 中是否存在 `app = FastAPI()` 或正确导出的变量名。
-   - 检查是否存在相对导入或包路径问题，尝试在 `backend` 目录下以模块方式运行（例如 `python -c "from main import app; print(app)"`）来验证导入。
-   - 确认虚拟环境已激活且依赖已安装（`pip install -r requirements.txt`）。
+- 确保 `tools/temp/` 目录存在：`New-Item -ItemType Directory -Path d:\AI_Investment\tools\temp -Force`
+- 确保 `build/config/` 目录下配置文件为无 BOM 的 UTF-8（YAML 解析器不兼容 BOM）。
 
-风险与注意事项
-- 不要在未经确认的情况下修改源码以“修复”导入，若需要改动应记录变更并等待人工确认。
+## 2. 健康检查与轮询
+
+服务启动后，轮询 `/health` 确认就绪：
+
+```powershell
+$ready = $false
+for ($i = 0; $i -lt 20; $i++) {
+    try {
+        $r = Invoke-RestMethod -Uri 'http://127.0.0.1:8080/health' -Method Get -TimeoutSec 1
+        if ($r.status -eq 'ok') { $ready = $true; break }
+    } catch {}
+    Start-Sleep -Milliseconds 500
+}
+if (-not $ready) { Stop-Process -Id $p.Id -Force; throw 'SERVICE_NOT_READY' }
+```
+
+## 3. 验收操作
+
+### 3.1 接口验收（保存响应为存证）
+
+```powershell
+# Health
+Invoke-RestMethod -Uri 'http://127.0.0.1:8080/health' -Method Get |
+  ConvertTo-Json -Compress | Out-File d:\AI_Investment\tools\temp\health.json -Encoding utf8
+
+# Plan
+$planBody = '{"profile":{"age":35,"risk":"medium","capital":500000}}'
+Invoke-RestMethod -Uri 'http://127.0.0.1:8080/api/v1/plan' `
+  -Method Post -ContentType 'application/json' -Body $planBody |
+  ConvertTo-Json -Compress | Out-File d:\AI_Investment\tools\temp\plan.json -Encoding utf8
+```
+
+### 3.2 最小验收判定
+
+- `/health` 返回 `{ "status": "ok" }`。
+- `/api/v1/plan` 返回有效 JSON（mock 或真实）。
+- stdout/stderr 日志文件存在（可为空，但须存在）。
+
+## 4. 停止服务
+
+```powershell
+Stop-Process -Id $p.Id -Force
+```
+
+停止后收集日志：
+
+```powershell
+Get-Content d:\AI_Investment\tools\temp\finguard_out.log -Raw
+Get-Content d:\AI_Investment\tools\temp\finguard_err.log -Raw
+```
+
+## 5. 故障排查
+
+| 现象 | 可能原因 | 排查步骤 |
+|------|---------|---------|
+| 服务未就绪（轮询超时） | 端口占用、可执行文件路径错误、依赖缺失 | 检查 8080 端口占用 `netstat -ano \| findstr 8080`；确认 exe 路径；查看 stderr 日志 |
+| 接口超时/错误 | LLM 配置缺失、网络不通、API Key 无效 | 查看 `finguard_err.log`；确认 `config/llm.json` 配置正确 |
+| YAML 解析失败 | 配置文件含 UTF-8 BOM | 用 `[System.IO.File]::WriteAllText(path, content, [System.Text.UTF8Encoding]::new($false))` 写无 BOM 文件 |
+| LNK1168 链接失败 | finguard.exe 被占用 | 停止运行中的进程后重新构建 |
+
+## 6. 自动化约束
+
+- 所有自动化操作必须写入日志（命令、时间戳、结果）。
+- 日志中敏感信息（API Key 等）必须脱敏。
+- 自动化启动失败时，将诊断信息写入 `tools/temp/` 并暂停等待人工复核。
+
+---
 
 变更日志
-- [2026-01-27] (自动加入) 来源：会话 2026-01-27 调试记录
-
-启动失败处理
-- 自动化启动失败时，agent 应自动收集启动输出并尝试识别常见错误（示例：`app` 未定义、端口占用、依赖缺失、环境变量缺失）。
-- 对于可安全自动修复的问题，按文档给出明确修复建议并记录尝试的操作；对不安全或高权限改动，暂停并将诊断与建议呈报用户。
-
-日志与可追溯性
-- 每次自动化操作必须写入日志，日志包含：执行命令、时间戳、摘要输出、是否成功、若失败则附错误摘要与建议步骤。
-- 日志必须脱敏敏感信息（API Key、密码等不可明文写入）。
-
-权限与风控
-- 自动化操作前需记录用户是否已授权自动化权限；用户可随时撤销。
-- 禁止自动执行高风险命令（如远程下载并执行、系统级删除、格式化磁盘等）。
-
-注记
-- 若后端代码中存在启动依赖（如相对导入），请在启动前确保虚拟环境与工作目录正确。
+- [2026-02-25] 全面整理：合并原 automation.md 与 backend_runtime_rules.md；移除过时 Python/uvicorn 内容；更新为 finguard C++ 后端。

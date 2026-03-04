@@ -1,0 +1,12 @@
+{
+  "provider": "qwen",
+  "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "api_key": "<YOUR_LLM_PROVIDER_API_KEY_HERE>",
+  "model": "qwen-plus",
+  "temperature": 0.7,
+  "timeout_ms": 30000,
+  "use_curl_fallback": true,
+  "curl_path": "curl.exe",
+  "http_proxy": "",
+  "notes": "Fill api_key with your provider key. http_proxy format: http://host:port. Do NOT commit the real llm.json to the repository."
+}

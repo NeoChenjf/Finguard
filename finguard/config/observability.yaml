@@ -1,0 +1,2 @@
+﻿log_fields: ["trace_id", "route", "status", "latency_ms"]
+metrics: ["requests_total", "latency_p95_ms", "latency_p99_ms", "rate_limit_rejects_total", "circuit_breaker_trips_total", "external_call_latency_ms"]

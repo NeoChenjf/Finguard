@@ -1,0 +1,15 @@
+{
+  "users" : 
+  {
+    "NeoChen" : 
+    {
+      "questionnaire" : 
+      {
+        "age" : 35,
+        "individual_stock_percent" : 0.29999999999999999,
+        "investor_profile" : "experienced"
+      }
+    }
+  },
+  "version" : 1
+}

@@ -1,0 +1,9 @@
+{
+  "tavily_api_key": "",
+  "alpha_vantage_api_key": "",
+  "yahoo_timeout_ms": 10000,
+  "search_max_results": 5,
+  "pe_history_quarters": 6,
+  "qualitative_prompt_language": "zh",
+  "http_proxy": "http://127.0.0.1:7890"
+}

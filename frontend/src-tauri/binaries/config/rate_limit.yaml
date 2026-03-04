@@ -1,0 +1,12 @@
+entry:
+  key: "user+route"
+  rate_rps: 5000
+  capacity: 20000
+  on_reject: "reject_429"
+model:
+  qwen:
+    rate_rps: 2000
+    capacity: 8000
+  deepseek:
+    rate_rps: 2000
+    capacity: 8000

@@ -1,5 +1,6 @@
 ﻿.env
 env/
+.venv/
 *.key
 *.pem
 *.secret
@@ -7,7 +8,12 @@ uploads/tmp/
 build/
 .vcpkg/
 .vscode/
+.vite/
 tools/
+node_modules/
+package-lock.json
+*.etl
+*.pdf
 
 # Ignore local LLM config containing API keys
 finguard/config/llm.json

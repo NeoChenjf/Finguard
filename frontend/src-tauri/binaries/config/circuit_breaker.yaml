@@ -1,0 +1,4 @@
+﻿error_rate_threshold: 0.50
+window_seconds: 30
+half_open_max_trials: 2
+min_samples: 5

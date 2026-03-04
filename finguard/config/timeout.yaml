@@ -1,0 +1,17 @@
+﻿external_call_timeout_ms: 15000
+external_call_max_retries: 1
+external_call_backoff_ms: 500
+routes:
+  chat_stream:
+    timeout_ms: 20000
+    max_retries: 1
+  plan:
+    timeout_ms: 15000
+    max_retries: 1
+models:
+  qwen:
+    timeout_ms: 20000
+    max_retries: 1
+  deepseek:
+    timeout_ms: 15000
+    max_retries: 1

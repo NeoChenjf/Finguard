@@ -1,177 +1,119 @@
-﻿# FinGuard — Phase 3 交接文档（任何 Agent 可无缝接手）
+# Next Plan
 
-本文档旨在让新接手的 Agent 在**不依赖上下文**的情况下，像“老员工”一样继续推进 Phase 3。
+## 当前状态
 
----
+- Phase 1-9 全部完成，验收闭环。
+- Phase 10 启动日期：2026-02-27，Spec 已冻结，开始实施。
 
-## 0. 快速入口（必读 5 分钟）
-1. `phase2.md`：Phase 2 已完成内容 + P1 深度排查结论（Drogon IPv6 / SNI）。
-2. `守拙价值多元化基金理念.md`：资产配置与选股规则的业务来源（强规则基础）。
-3. `finguard/config/rules.yaml`：当前规则配置（关键词、画像、个股比例、警示模板等）。
-4. `phase3.md`：Phase 3 进展与日志。
-5. `学习文档/20260202/study.md`：教学内容与“教教我”默认更新规则。
+## 阶段总览
 
----
+| 阶段 | 名称 | 状态 | 完成日期 |
+|------|------|------|----------|
+| Phase 1 | C++ 核心骨架与 LLM 代理 | **已完成** | — |
+| Phase 2 | 风控闸门与规则引擎 | **已完成** | — |
+| Phase 3 | 流式输出与 SSE | **已完成** | — |
+| Phase 4 | 限流 / 熔断 / 缓存 / 可观测 | **已完成** | — |
+| Phase 5 | 压测与性能优化 | **已完成** | — |
+| Phase 6 | 测试加固与 Release 构建 | **已完成** | — |
+| Phase 7 | 前端 MVP（Vite + React） | **已完成** | 2026-02-26 |
+| Phase 8 | 桌面壳与本地启动器（Tauri） | **已完成** | 2026-02-26 |
+| Phase 9 | 打包分发与最终交付 | **已完成** | 2026-02-27 |
+| Phase 10 | Value Cell 量化价值分析系统 | **进行中** | — |
 
-## 1. 当前项目状态（截至 2026-02-02）
-### 已稳定可用
-- SSE 接口 `/api/v1/chat/stream` 已实现，输出 token/cite/metric/warning/done。
-- `X-API-Key` 鉴权已生效，与 `config/llm.json` 的 api_key 匹配。
-- LLM 通过 curl fallback 通路可正常输出真实 Qwen 回复。
+## Phase 10 已知阻塞问题
 
-### Phase 3 已完成
-- 规则配置文件 `finguard/config/rules.yaml` 已按“守拙价值多元化基金理念”整理。
-- 问卷档案接口已新增：`POST /api/v1/profile/upsert`（Header: `X-User-Id`）。
-- 本地档案存储实现：`config/profiles.json`（文件存储，数据库为技术债务）。
-- RuleEngine 基础实现已接入 `/api/v1/chat/stream`（请求侧警示）。
+> Yahoo 429 已于 2026-03-03 修复（根因：User-Agent + Accept 头）。以下为剩余待办。
 
-### 仍需完成
-- `RuleEngine::check_response()`：响应侧规则（资产分配、选股指标等）。
-- 警示输出结构完善（更明确的原因 + 触发词）。
-- 验收脚本/命令标准化。
+### 1. Alpha Vantage API Key 未配置
 
----
+- **现象**：`config/valuation.json` 中 `alpha_vantage_api_key` 为空，Yahoo 失败时无法执行降级。
+- **待解决**：注册 Alpha Vantage 免费 Key（25 次/天），写入配置。
 
-## 2. 技术债务（必须知晓）
-- Drogon HttpClient 直连失败（IPv6 + SNI 问题）
-  - 结论：**接受 curl fallback 作为当前交付标准**。
-  - 参考：`phase2.md` + `学习文档/20260201/`。
+### 2. Tavily 搜索 API Key 未配置
 
----
+- **现象**：`config/valuation.json` 中 `tavily_api_key` 为空，定性搜索降级为空结果，LLM 缺少搜索语料。
+- **影响**：定性分析（护城河、管理层、商业模式）质量降低，LLM 只能依赖内置知识。
+- **待解决**：注册 Tavily API Key（免费 1000 次/月），写入配置并验证。
 
-## 3. 关键规则与业务原则（强规则 + 弱 LLM）
-### 业务立场
-- LLM 只做“公司分析与解释文本”，不负责决定配置。
-- 配置与风控规则由后端 RuleEngine 决定。
+### 3. Tauri 安装包集成验收
 
-### 规则来源
-- `守拙价值多元化基金理念.md`
+- **待解决**：重新 Tauri build（含最新 finguard.exe + valuation.json），执行安装态验收清单。
 
-### 规则配置文件
-- `finguard/config/rules.yaml`
-  - 关键词触发：博彩、高杠杆、ST、期货、做空等。
-  - 画像与个股比例限制：novice/experienced/professional。
-  - 默认年龄：35（对应 30–40 岁区间）。
-  - warning 模板（含触发词提示）。
+## Phase 9 成果摘要
 
----
+- **NSIS 安装包**：`FinGuard_0.1.0_x64-setup.exe`（4.4 MB），双击安装到 `%LOCALAPPDATA%/FinGuard/`。
+- **MSI 安装包**：`FinGuard_0.1.0_x64_en-US.msi`（6.05 MB），备选分发格式。
+- **bundle.resources**：10 个 DLL + config/ 目录随安装包分发，无需手动复制。
+- **config 初始化**：首次启动自动将 config/ 从安装目录复制到 `%APPDATA%/finguard/config/`，后续不覆盖用户修改。
+- **sidecar CWD 适配**：生产模式 CWD = `%APPDATA%/finguard/`，开发模式保持 exe 同目录。
+- **验收**：V1-V6 全部 PASS。安装后 sidecar 自动拉起、/health 通过、关闭无残留。
+- 详见 `phase9.md` Chapter 3 & 4。
 
-## 4. 已新增代码与入口
-### 新增文件
-- `finguard/src/risk/profile_store.h`
-- `finguard/src/risk/profile_store.cpp`
-- `finguard/src/risk/rule_engine.h`
-- `finguard/src/risk/rule_engine.cpp`
+## Phase 9 踩坑备忘（交接用）
 
-### 相关集成点
-- `finguard/src/server/routes.cpp`
-  - 新增接口：`/api/v1/profile/upsert`
-  - `/api/v1/chat/stream` 中调用 RuleEngine 并合并 warnings
+1. **plugin-store 类型变更**：`@tauri-apps/plugin-store` v2.4.2 的 `load()` 要求 `defaults` 属性（required），旧代码 `{ autoSave: true }` 编译失败，需改为 `{ autoSave: true, defaults: {} }`。
+2. **NSIS 下载超时**：Tauri 内置下载器从 GitHub 下载 NSIS 有网络问题时反复 timeout。解决：手动用 `curl.exe -L` 下载到 `%LOCALAPPDATA%/tauri/`，Tauri 会自动检测并使用。
+3. **NSIS 目录命名**：手动下载解压后目录名为 `nsis-3.11/`，Tauri 查找目录名为 `NSIS/`，需重命名。实测 Tauri 如检测不符会重新下载覆盖。
 
-### 构建入口
-- `finguard/CMakeLists.txt` 已加入 `profile_store.cpp` 和 `rule_engine.cpp`
+## 下一步任务：Phase 10（Value Cell 量化价值分析系统）
 
----
+### 目标
 
-## 5. 关键接口说明
-### 5.1 问卷写入接口（已实现）
-- `POST /api/v1/profile/upsert`
-- Header: `X-User-Id: <账号>`
-- Body:
-```json
-{
-  "questionnaire": {
-    "age": 35,
-    "investor_profile": "experienced",
-    "experience_years_band": "5-10",
-    "annualized_return_band": "10-20",
-    "beat_sp500_10y": "no",
-    "individual_stock_percent": 0.30
-  }
-}
-```
-- 存储：`config/profiles.json`
+将 FinGuard 从通用 LLM 网关转型为"定性 + 定量"的量化价值投资分析系统，放弃 PDF RAG 路径，采用结构化数据 + 搜索引擎方案。
 
-### 5.2 SSE 流式问答（已实现 + 接入规则）
-- `POST /api/v1/chat/stream`
-- Header: `X-API-Key`, `X-User-Id`
-- Body:
-```json
-{
-  "prompt": "......"
-}
-```
-- 规则引擎会：
-  - 检查关键词
-  - 检查画像与个股比例
-  - 若缺失档案会输出 warning
+### 核心功能
 
----
+1. **Yahoo Finance 数据模块**：获取 PE、PB、PEG、未来预期增长率等结构化财务指标。
+2. **Search Wrapper 模块**：通过搜索引擎 API 获取目标公司护城河、管理层、商业模式定性信息。
+3. **安全边际计算** (`calculateSafetyMargin`)：对比当前 PE 与 5 年历史均值，判定安全边际。
+4. **评价逻辑**：(PE < 历史均值) AND (PEG < 1.0) → "安全边际区间"。
+5. **Markdown 结构化输出**：定性评分 (0-10)、PEG 值、安全边际判定 (Yes/No)、核心投资结论。
 
-## 6. 当前规则引擎状态
-### 已完成
-- `RuleEngine::load_config()`：轻量 YAML 解析（只读必要字段）。
-- `RuleEngine::check_request()`：关键词、画像与个股比例检查。
+### 执行策略
 
-### 计划完善
-- `RuleEngine::check_response()`：
-  - 资产分配计算与校验
-  - 选股指标（PEG、负债率、ROE、现金流）
-  - 输出结构化原因
+1. Spec 前置收敛（API 选型、数据模型、输出格式）
+2. C++ 后端新增 `valuation/` 模块（yahoo_finance_client、search_wrapper、safety_margin）
+3. 新增 `/api/v1/valuecell` 接口
+4. 前端新增 Value Cell 分析页面
+5. 端到端验收
 
----
+### 待确认 Spec（已冻结）
 
-## 7. 验收建议（建议写成脚本）
-1. 写入问卷
-```powershell
-curl.exe -X POST "http://localhost:8080/api/v1/profile/upsert" ^
-  -H "Content-Type: application/json" ^
-  -H "X-User-Id: NeoChen" ^
-  -d "{\"questionnaire\":{\"age\":35,\"investor_profile\":\"experienced\",\"individual_stock_percent\":0.3}}"
-```
+- ✅ Yahoo Finance 非官方 API 作主源（`query1.finance.yahoo.com/v10/finance/quoteSummary`），Alpha Vantage 降级
+- ✅ Tavily API 作搜索引擎（免费 1000次/月，结构化摘要，直接喂 LLM）
+- ✅ 历史 PE 均值：近 4~8 季度 Trailing EPS 估算均值（EPS≤0 的季度跳过）
+- ✅ 定性评分：LLM 直接打分（temperature=0，固定 prompt 模板）
+- ✅ 配置文件：新建 `config/valuation.json`（`tavily_api_key`、`alpha_vantage_api_key`、超时等）
+- 详见 `phase10.md` Chapter 1
 
-2. 触发关键词 warning
-```powershell
-curl.exe -X POST "http://localhost:8080/api/v1/chat/stream" ^
-  -H "Content-Type: application/json" ^
-  -H "X-API-Key: <api_key>" ^
-  -H "X-User-Id: NeoChen" ^
-  -d "{\"prompt\":\"我想用高杠杆做空\"}"
-```
+## 关键技术栈速查
 
----
+| 层 | 技术 | 版本 |
+|----|------|------|
+| 桌面壳 | Tauri | v2.10.2 |
+| 桌面 Rust 侧 | Rust | 1.93.1 |
+| 前端 | Vite + React + TypeScript + TailwindCSS v4 | Vite 7.3.1 / React 19.2.0 |
+| 状态管理 | Zustand | 5.0.11 |
+| 持久化 | tauri-plugin-store | 2.4.2 |
+| Sidecar 管理 | tauri-plugin-shell | 2.3.5 |
+| 后端 | C++ / Drogon | CMake Release |
+| 后端 API | REST + SSE | port 8080 |
 
-## 8. 开发规范（必须遵守）
-- 新功能优先“新增函数/头文件 + 引入”，避免大改旧代码。
-- “教教我”默认更新 `学习文档/20260202/study.md`。
-- 关键规则变更需同步更新 `phase3.md` 与 `next_plan.md`。
+## 关键文件速查
 
----
+| 文件 | 说明 |
+|------|------|
+| `项目书.md` | 总体项目规划 |
+| `phase9.md` | Phase 9 完整记录（打包分发） |
+| `phase8.md` | Phase 8 完整记录（Tauri 桌面壳） |
+| `phase7.md` | Phase 7 完整记录（前端 MVP） |
+| `frontend/src-tauri/src/lib.rs` | Tauri 核心逻辑（sidecar、config 初始化、托盘） |
+| `frontend/src-tauri/build.rs` | 构建脚本（DLL + config 复制） |
+| `frontend/src-tauri/tauri.conf.json` | Tauri 应用配置（含 bundle.resources） |
+| `frontend/src/api/client.ts` | 后端 API 客户端 |
+| `frontend/src/api/store.ts` | 配置持久化工具 |
+| `finguard/src/server/routes.cpp` | 后端路由 |
+| `finguard/config/llm.json` | 后端 LLM 配置 |
+| `workbook/` | 员工手册 |
 
-## 9. 接手后的下一步路线图
-1. 实现 `check_response()` 并完善 warning 输出结构。
-2. 统一 warning 结构（含触发词 + 原因 + 理性提示）。
-3. 若需要个性化解释，可选“档案摘要注入 system prompt”。
-
----
-
-## 10. 需要提醒用户的事情（Agent 提示清单）
-- 先阅读 `学习文档/20260202/明日前置学习路线.md`，确认理解新增代码的学习路径。
-- 确认是否要继续完善 `check_response()`（资产分配 + 个股指标）或先补验收脚本。
-- 若要个性化解释，讨论是否采用“档案摘要注入 system prompt”。
-
----
-
-## 11. 参考索引（路径清单）
-- 规则配置：`finguard/config/rules.yaml`
-- 问卷存储：`config/profiles.json`
-- 规则引擎：`finguard/src/risk/rule_engine.*`
-- 档案存储：`finguard/src/risk/profile_store.*`
-- SSE 路由：`finguard/src/server/routes.cpp`
-- 业务理念：`守拙价值多元化基金理念.md`
-- Phase 3 进度：`phase3.md`
-
----
-
-## 11. 交接总结（一句话）
-Phase 3 已完成“问卷档案 + 规则引擎请求侧接入”，下一步是补齐响应侧规则与标准化验收。
+最后更新：2026-02-28
