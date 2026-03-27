@@ -42,15 +42,15 @@ std::string build_qualitative_prompt(const std::string &symbol,
         } else {
             prompt << "（未能获取搜索资料，请基于你的知识进行分析）\n\n";
         }
-        prompt << "财务背景：当前 PE=" << fmt_double(metrics.trailing_pe)
-               << "，历史 PE 均值=" << fmt_double(metrics.historical_pe_mean)
-               << "，PEG=" << fmt_double(metrics.peg_ratio)
-               << "，安全边际="
-               << (metrics.has_sufficient_data &&
-                       metrics.trailing_pe < metrics.historical_pe_mean &&
-                       metrics.peg_ratio > 0.0 && metrics.peg_ratio < 1.0
-                       ? "是"
-                       : "否")
+        prompt << "财务背景：股价=" << fmt_double(metrics.price)
+               << "，EPS=" << fmt_double(metrics.eps)
+               << "，PE=" << fmt_double(metrics.pe)
+               << "，5年平均ROE="
+               << (metrics.avg_roe_5y >= 0.0 ? fmt_double(metrics.avg_roe_5y * 100.0) + "%" : "N/A")
+               << "，负债率="
+               << (metrics.debt_ratio >= 0.0 ? fmt_double(metrics.debt_ratio * 100.0) + "%" : "N/A")
+               << "，5年CAGR=" << fmt_double(metrics.growth_5y_cagr * 100.0) << "%"
+               << "，PEG=" << fmt_double(metrics.peg)
                << "。\n\n";
         prompt
             << "请以以下 JSON 格式回复（不要包含任何其他内容）：\n"
@@ -69,9 +69,15 @@ std::string build_qualitative_prompt(const std::string &symbol,
         } else {
             prompt << "(No search data available; use your knowledge.)\n\n";
         }
-        prompt << "Financial context: Trailing PE=" << fmt_double(metrics.trailing_pe)
-               << ", Historical PE mean=" << fmt_double(metrics.historical_pe_mean)
-               << ", PEG=" << fmt_double(metrics.peg_ratio) << ".\n\n";
+         prompt << "Financial context: Price=" << fmt_double(metrics.price)
+             << ", EPS=" << fmt_double(metrics.eps)
+             << ", PE=" << fmt_double(metrics.pe)
+             << ", 5Y avg ROE="
+             << (metrics.avg_roe_5y >= 0.0 ? fmt_double(metrics.avg_roe_5y * 100.0) + "%" : "N/A")
+             << ", Debt ratio="
+             << (metrics.debt_ratio >= 0.0 ? fmt_double(metrics.debt_ratio * 100.0) + "%" : "N/A")
+             << ", 5Y CAGR=" << fmt_double(metrics.growth_5y_cagr * 100.0) << "%"
+             << ", PEG=" << fmt_double(metrics.peg) << ".\n\n";
         prompt
             << "Reply ONLY in this JSON format:\n"
                R"({
@@ -136,9 +142,20 @@ std::string build_markdown_report(const std::string &symbol,
     md << "| 定性评分 | "
        << (qa.qualitative_score >= 0 ? fmt_double(qa.qualitative_score, 1) + " / 10" : "N/A")
        << " |\n";
-    md << "| 当前 PE | " << fmt_double(metrics.trailing_pe) << " |\n";
-    md << "| 历史 PE 均值 | " << fmt_double(metrics.historical_pe_mean) << " |\n";
-    md << "| 当前 PEG | " << fmt_double(metrics.peg_ratio) << " |\n";
+    md << "| 股价 | " << fmt_double(metrics.price) << " |\n";
+    md << "| EPS | " << fmt_double(metrics.eps) << " |\n";
+    md << "| 每股净资产 (BVPS) | " << fmt_double(metrics.book_value_per_share) << " |\n";
+    md << "| 负债率 | "
+       << (metrics.debt_ratio >= 0.0 ? fmt_double(metrics.debt_ratio * 100.0) + "%" : "N/A")
+       << " |\n";
+    md << "| 5年平均ROE | "
+       << (metrics.avg_roe_5y >= 0.0 ? fmt_double(metrics.avg_roe_5y * 100.0) + "%" : "N/A")
+       << " |\n";
+    md << "| 最近3年净利润均值 | " << fmt_double(metrics.np_recent3_avg) << " |\n";
+    md << "| 倒退5年前3年净利润均值 | " << fmt_double(metrics.np_past3_avg) << " |\n";
+    md << "| 5年CAGR | " << (metrics.growth_5y_cagr >= 0 ? fmt_double(metrics.growth_5y_cagr * 100.0) + "%" : "N/A") << " |\n";
+    md << "| 当前 PE | " << fmt_double(metrics.pe) << " |\n";
+    md << "| 当前 PEG | " << fmt_double(metrics.peg) << " |\n";
     md << "| 市净率 (PB) | " << fmt_double(metrics.price_to_book) << " |\n";
 
     if (sm.insufficient_data) {
@@ -182,8 +199,8 @@ void handle_valuecell(const drogon::HttpRequestPtr &req,
         cb(resp);
         return;
     }
-    const std::string symbol = (*json_ptr)["symbol"].asString();
-    if (symbol.empty() || symbol.size() > 20) {
+    const std::string requested_symbol = (*json_ptr)["symbol"].asString();
+    if (requested_symbol.empty() || requested_symbol.size() > 20) {
         Json::Value err;
         err["error"]   = "invalid_symbol";
         err["message"] = "symbol 格式不合法";
@@ -192,43 +209,27 @@ void handle_valuecell(const drogon::HttpRequestPtr &req,
         cb(resp);
         return;
     }
-    spdlog::info("[ValuationHandler] Start analysis for {}", symbol);
+    spdlog::info("[ValuationHandler] Start analysis for {}", requested_symbol);
 
     // ── Step 2: 加载配置 ──
     const auto val_config = load_valuation_config();
 
     // ── Step 3: 获取财务指标（Yahoo Finance → Alpha Vantage 降级）──
-    const auto metrics = fetch_financial_metrics(symbol, val_config);
+    const auto metrics = fetch_financial_metrics(requested_symbol, val_config);
 
     // ── Step 4: 安全边际计算 ──
     const auto sm = calculate_safety_margin(metrics);
 
-    // ── Step 5: 定性搜索（Tavily）──
-    const auto search = fetch_qualitative_info(symbol, val_config);
-
-    // ── Step 6: LLM 定性评分 ──
-    const std::string prompt = build_qualitative_prompt(
-        symbol, search, metrics, val_config.qualitative_prompt_language);
-
-    llm::LlmClient llm_client;
-    const auto llm_result = llm_client.stream_chat(prompt);
-
+    // ── Step 5/6: 当前 ValueCell 已回归“单仪表盘”基本面分析，不再阻塞等待搜索/LLM ──
+    SearchResult search;
     QualitativeAnalysis qa;
-    if (!llm_result.degraded && !llm_result.full_text.empty()) {
-        qa = parse_qualitative_json(llm_result.full_text);
-        if (!qa.parse_ok) {
-            spdlog::warn("[ValuationHandler] LLM JSON parse failed for {}: {}",
-                         symbol, llm_result.full_text.substr(0, 200));
-            // 降级：把 full_text 直接作为 conclusion
-            qa.conclusion = llm_result.full_text;
-        }
-    } else {
-        spdlog::warn("[ValuationHandler] LLM degraded for {}: {}", symbol,
-                     llm_result.error);
-    }
+    llm::StreamResult llm_result;
+    llm_result.degraded = true;
+    llm_result.error = "qualitative_analysis_disabled_for_valuecell";
+    qa.conclusion = "当前 ValueCell 页面已收敛为单仪表盘基本面分析，默认不再等待定性搜索与 LLM 报告。";
 
     // ── Step 7: 生成 Markdown 报告 ──
-    const std::string markdown = build_markdown_report(symbol, metrics, sm, qa);
+    const std::string markdown = build_markdown_report(metrics.symbol, metrics, sm, qa);
 
     // ── Step 8: 组装响应 JSON ──
     const auto elapsed_ms = static_cast<int>(
@@ -237,9 +238,51 @@ void handle_valuecell(const drogon::HttpRequestPtr &req,
             .count());
 
     Json::Value resp_body;
-    resp_body["symbol"] = symbol;
+    resp_body["symbol"] = metrics.symbol;
+    if (metrics.symbol != requested_symbol) {
+        resp_body["requested_symbol"] = requested_symbol;
+    }
 
     // 财务指标
+    resp_body["book_value_per_share"] = (metrics.book_value_per_share > 0) ? metrics.book_value_per_share : -1.0;
+    resp_body["eps"]                = (metrics.eps > 0) ? metrics.eps : -1.0;
+    resp_body["price"]              = (metrics.price > 0) ? metrics.price : -1.0;
+    resp_body["total_assets"]       = (metrics.total_assets > 0) ? metrics.total_assets : -1.0;
+    resp_body["total_liabilities"]  = (metrics.total_liabilities >= 0) ? metrics.total_liabilities : -1.0;
+    resp_body["debt_ratio"]         = (metrics.debt_ratio >= 0) ? metrics.debt_ratio : -1.0;
+    resp_body["np_recent3_avg"]     = metrics.np_recent3_avg;
+    resp_body["np_past3_avg"]       = metrics.np_past3_avg;
+    resp_body["growth_5y_cagr"]     = metrics.growth_5y_cagr;
+    resp_body["avg_roe_5y"]         = (metrics.avg_roe_5y >= 0) ? metrics.avg_roe_5y : -1.0;
+    resp_body["pe"]                 = (metrics.pe > 0) ? metrics.pe : -1.0;
+    resp_body["peg"]                = (metrics.peg > 0) ? metrics.peg : -1.0;
+    resp_body["valuation_label"]    = metrics.valuation_label;
+
+    Json::Value net_profit_arr(Json::arrayValue);
+    for (const auto v : metrics.net_profit_8y) {
+        net_profit_arr.append(v);
+    }
+    resp_body["net_profit_8y"] = net_profit_arr;
+
+    Json::Value net_profit_history_arr(Json::arrayValue);
+    for (const auto &row : metrics.net_profit_history) {
+        Json::Value one;
+        one["year"] = row.year;
+        one["net_income"] = row.net_income;
+        one["source"] = row.source;
+        net_profit_history_arr.append(one);
+    }
+    resp_body["net_profit_history"] = net_profit_history_arr;
+    resp_body["net_profit_source"] = metrics.net_profit_source;
+    resp_body["net_profit_updated_at"] = metrics.net_profit_updated_at;
+
+    Json::Value warnings_arr(Json::arrayValue);
+    for (const auto &w : metrics.warnings) {
+        warnings_arr.append(w);
+    }
+    resp_body["warnings"] = warnings_arr;
+
+    // 兼容旧版字段
     resp_body["current_pe"]         = (metrics.trailing_pe > 0) ? metrics.trailing_pe : -1.0;
     resp_body["historical_pe_mean"] = (metrics.historical_pe_mean > 0) ? metrics.historical_pe_mean : -1.0;
     resp_body["current_peg"]        = (metrics.peg_ratio > 0) ? metrics.peg_ratio : -1.0;
@@ -276,7 +319,7 @@ void handle_valuecell(const drogon::HttpRequestPtr &req,
     }
 
     spdlog::info("[ValuationHandler] {} done in {}ms — safety_margin={}, score={:.1f}",
-                 symbol, elapsed_ms, sm.in_safety_margin,
+                 metrics.symbol, elapsed_ms, sm.in_safety_margin,
                  (qa.qualitative_score >= 0 ? qa.qualitative_score : -1.0));
 
     auto http_resp = HttpResponse::newHttpJsonResponse(resp_body);

@@ -23,6 +23,7 @@ add_library(finguard_core STATIC
     src/risk/rule_engine.cpp
     src/server/http_server.cpp
     src/server/routes.cpp
+        src/server/allocation_handler.cpp
     src/util/simple_yaml.cpp
     src/util/reliability_config.cpp
     src/util/token_bucket.cpp
@@ -36,6 +37,11 @@ add_library(finguard_core STATIC
     src/valuation/search_wrapper.cpp
     src/valuation/safety_margin.cpp
     src/valuation/valuation_handler.cpp
+    # Asset Allocation Multi-Rules: 多规则资产配置框架
+    src/core/allocation_rule.cpp
+    src/core/rule_factory.cpp
+    src/core/rules/shouzhe_rule.cpp
+    src/core/rules/fixed_rules.cpp
 )
 target_include_directories(finguard_core PUBLIC src)
 target_link_libraries(finguard_core
@@ -94,6 +100,7 @@ if(BUILD_TESTS)
         tests/test_llm_config.cpp
         tests/test_token_bucket.cpp
         tests/test_circuit_breaker.cpp
+        tests/test_valuation_metrics.cpp
     )
     target_link_libraries(finguard_tests
         PRIVATE

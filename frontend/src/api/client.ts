@@ -38,13 +38,22 @@ export interface PlanRequest {
 }
 
 export interface PlanResponse {
+  rule_name?: 'shouzhe' | 'bridgewater' | 'permanent' | 'swensen';
   proposed_portfolio: Record<string, number>;
   risk_report: {
     status: string;
     triggered_rules: string[];
   };
   rationale: string;
-  rebalancing_actions: string[];
+  rebalancing_actions: Array<
+    | string
+    | {
+        symbol: string;
+        current_weight: number;
+        target_weight: number;
+        action: string;
+      }
+  >;
 }
 
 export interface SSEEvent {
@@ -88,8 +97,11 @@ export async function postSettings(body: Record<string, unknown>): Promise<{ sta
 
 // ── 配置建议 ──
 
-export async function postPlan(body: PlanRequest): Promise<PlanResponse> {
-  const res = await fetch(`${API_BASE}/api/v1/plan`, {
+export async function postPlan(
+  body: PlanRequest,
+  rule: 'shouzhe' | 'bridgewater' | 'permanent' | 'swensen' = 'shouzhe',
+): Promise<PlanResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/plan?rule=${encodeURIComponent(rule)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -109,6 +121,30 @@ export interface ValueCellRequest {
 
 export interface ValueCellResponse {
   symbol: string;
+  book_value_per_share: number;
+  eps: number;
+  price: number;
+  total_assets: number;
+  total_liabilities: number;
+  debt_ratio: number;
+  net_profit_8y: number[];
+  net_profit_history: Array<{
+    year: number;
+    net_income: number;
+    source: string;
+  }>;
+  net_profit_source: string;
+  net_profit_updated_at: string;
+  np_recent3_avg: number;
+  np_past3_avg: number;
+  growth_5y_cagr: number;
+  avg_roe_5y: number;
+  pe: number;
+  peg: number;
+  valuation_label: 'undervalued' | 'fair' | 'overvalued' | 'unknown' | string;
+  warnings: string[];
+
+  // 兼容旧字段
   current_pe: number;
   historical_pe_mean: number;
   current_peg: number;

@@ -1,0 +1,7 @@
+interface:
+  display_name: "AI Investment Workbook"
+  short_description: "Repository workbook operating rules"
+  default_prompt: "Use $ai-investment-workbook to complete a D:\AI_Investment or FinGuard task under the workbook operating rules."
+
+policy:
+  allow_implicit_invocation: true

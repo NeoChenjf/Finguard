@@ -1,0 +1,92 @@
+{
+    "analysis_time_ms":  4077,
+    "book_value_per_share":  37.700000000000003,
+    "current_pe":  7.4199999999999999,
+    "current_peg":  1.911,
+    "data_source":  "alpha_vantage",
+    "debt_ratio":  0.40851921626178472,
+    "earnings_growth":  -1.0,
+    "eps":  6.9199999999999999,
+    "growth_5y_cagr":  0.22530790865731953,
+    "historical_pe_mean":  8.6803227720462743,
+    "investment_conclusion":  "## Value Cell 分析报告 — TCOM\n\n| 指标 | 值 |\n|------|----|\n| 定性评分 | N/A |\n| 股价 | N/A |\n| EPS | 6.92 |\n| 每股净资产 (BVPS) | 37.70 |\n| 负债率 | 40.85% |\n| 最近3年净利润均值 | 9462666666.67 |\n| 倒退5年前3年净利润均值 | 3426000000.00 |\n| 5年CAGR | 22.53% |\n| 当前 PE | N/A |\n| 当前 PEG | N/A |\n| 市净率 (PB) | 1.35 |\n| 安全边际判定 | ❌ No |\n| 数据来源 | alpha_vantage |\n\n### 安全边际分析\n当前 PE=7.42，历史均值=8.68032，PEG=1.911。当前 PE 低于历史均值（✅）；PEG ≥ 1.0，增长已被充分定价（❌）→ 不在安全边际区间。\n\n### 核心投资结论\n（LLM 分析暂不可用）\n\n### 定性分析\n- **护城河**：N/A\n- **管理层**：N/A\n- **商业模式**：N/A\n",
+    "net_profit_8y":  [
+                          2155000000.0,
+                          1112000000.0,
+                          7011000000.0,
+                          -3247000000.0,
+                          -550000000.0,
+                          1403000000.0,
+                          9918000000.0,
+                          17067000000.0
+                      ],
+    "net_profit_history":  [
+                               {
+                                   "net_income":  2155000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2017
+                               },
+                               {
+                                   "net_income":  1112000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2018
+                               },
+                               {
+                                   "net_income":  7011000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2019
+                               },
+                               {
+                                   "net_income":  -3247000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2020
+                               },
+                               {
+                                   "net_income":  -550000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2021
+                               },
+                               {
+                                   "net_income":  1403000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2022
+                               },
+                               {
+                                   "net_income":  9918000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2023
+                               },
+                               {
+                                   "net_income":  17067000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2024
+                               }
+                           ],
+    "net_profit_source":  "alpha_vantage",
+    "net_profit_updated_at":  "2026-03-26T15:49:07Z",
+    "np_past3_avg":  3426000000.0,
+    "np_recent3_avg":  9462666666.666666,
+    "pe":  -1.0,
+    "pe_history_quarters_used":  6,
+    "peg":  -1.0,
+    "price":  -1.0,
+    "price_to_book":  1.3520000000000001,
+    "qualitative_analysis":  {
+                                 "business_model":  "",
+                                 "management":  "",
+                                 "moat":  ""
+                             },
+    "qualitative_score":  -1.0,
+    "safety_margin":  false,
+    "safety_margin_reason":  "当前 PE=7.42，历史均值=8.68032，PEG=1.911。当前 PE 低于历史均值（✅）；PEG ≥ 1.0，增长已被充分定价（❌）→ 不在安全边际区间。",
+    "search_warning":  "no_tavily_api_key",
+    "symbol":  "TCOM",
+    "total_assets":  242581000000.0,
+    "total_liabilities":  99099000000.0,
+    "valuation_label":  "unknown",
+    "warnings":  [
+                     "alpha_balance_sheet_error",
+                     "debt_ratio_source_yahoo_finance",
+                     "cache_net_income_insufficient_years"
+                 ]
+}

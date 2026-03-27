@@ -1,0 +1,92 @@
+{
+    "analysis_time_ms":  2956,
+    "book_value_per_share":  40.649999999999999,
+    "current_pe":  9.8000000000000007,
+    "current_peg":  1.0289999999999999,
+    "data_source":  "alpha_vantage",
+    "debt_ratio":  0.37962012862508138,
+    "earnings_growth":  -1.0,
+    "eps":  10.470000000000001,
+    "growth_5y_cagr":  -1.0,
+    "historical_pe_mean":  10.080070216273926,
+    "investment_conclusion":  "## Value Cell 分析报告 — PDD\n\n| 指标 | 值 |\n|------|----|\n| 定性评分 | N/A |\n| 股价 | N/A |\n| EPS | 10.47 |\n| 每股净资产 (BVPS) | 40.65 |\n| 负债率 | 37.96% |\n| 最近3年净利润均值 | 67999706000.00 |\n| 倒退5年前3年净利润均值 | N/A |\n| 5年CAGR | N/A |\n| 当前 PE | N/A |\n| 当前 PEG | N/A |\n| 市净率 (PB) | 2.40 |\n| 安全边际判定 | ❌ No |\n| 数据来源 | alpha_vantage |\n\n### 安全边际分析\n当前 PE=9.8，历史均值=10.0801，PEG=1.029。当前 PE 低于历史均值（✅）；PEG ≥ 1.0，增长已被充分定价（❌）→ 不在安全边际区间。\n\n### 核心投资结论\n（LLM 分析暂不可用）\n\n### 定性分析\n- **护城河**：N/A\n- **管理层**：N/A\n- **商业模式**：N/A\n",
+    "net_profit_8y":  [
+                          -525115000.0,
+                          -10217125000.0,
+                          -6967603000.0,
+                          -7179742000.0,
+                          7768670000.0,
+                          31538062000.0,
+                          60026544000.0,
+                          112434512000.0
+                      ],
+    "net_profit_history":  [
+                               {
+                                   "net_income":  -525115000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2017
+                               },
+                               {
+                                   "net_income":  -10217125000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2018
+                               },
+                               {
+                                   "net_income":  -6967603000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2019
+                               },
+                               {
+                                   "net_income":  -7179742000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2020
+                               },
+                               {
+                                   "net_income":  7768670000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2021
+                               },
+                               {
+                                   "net_income":  31538062000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2022
+                               },
+                               {
+                                   "net_income":  60026544000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2023
+                               },
+                               {
+                                   "net_income":  112434512000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2024
+                               }
+                           ],
+    "net_profit_source":  "alpha_vantage",
+    "net_profit_updated_at":  "2026-03-26T15:49:10Z",
+    "np_past3_avg":  -5903281000.0,
+    "np_recent3_avg":  67999706000.0,
+    "pe":  -1.0,
+    "pe_history_quarters_used":  6,
+    "peg":  -1.0,
+    "price":  -1.0,
+    "price_to_book":  2.3980000000000001,
+    "qualitative_analysis":  {
+                                 "business_model":  "",
+                                 "management":  "",
+                                 "moat":  ""
+                             },
+    "qualitative_score":  -1.0,
+    "safety_margin":  false,
+    "safety_margin_reason":  "当前 PE=9.8，历史均值=10.0801，PEG=1.029。当前 PE 低于历史均值（✅）；PEG ≥ 1.0，增长已被充分定价（❌）→ 不在安全边际区间。",
+    "search_warning":  "no_tavily_api_key",
+    "symbol":  "PDD",
+    "total_assets":  505034316000.0,
+    "total_liabilities":  191721192000.0,
+    "valuation_label":  "unknown",
+    "warnings":  [
+                     "alpha_balance_sheet_error",
+                     "debt_ratio_source_yahoo_finance",
+                     "invalid_growth_base"
+                 ]
+}

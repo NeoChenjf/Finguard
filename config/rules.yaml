@@ -1,0 +1,7 @@
+version: 1
+warnings:
+  keyword_rules:
+    forbidden_keywords:
+      - "博彩"
+      - "高杠杆"
+      - "ST"

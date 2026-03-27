@@ -18,6 +18,7 @@
 #include "llm/llm_client.h"
 #include "risk/profile_store.h"
 #include "risk/rule_engine.h"
+#include "server/allocation_handler.h"
 #include "util/concurrency_limiter.h"
 #include "util/metrics_registry.h"
 #include "util/reliability_config.h"
@@ -171,136 +172,28 @@ void setup_routes() {
             log_request_metrics(trace_id, route, 400, latency_ms);
             return;
         }
-        const auto &profile = (*json_ptr)["profile"];
 
-        // ── 读取画像参数 ──
-        const int age = profile.get("age", 30).asInt();
-        const std::string investor_type = profile.get("investor_type", "novice").asString();
-        const std::string exp_years = profile.get("experience_years", "0-5").asString();
-        const std::string annual_ret = profile.get("annualized_return", "0-10").asString();
-        const std::string beat_sp500 = profile.get("beat_sp500_10y", "no").asString();
-        const double individual_pct = profile.get("individual_stock_percent", 0.0).asDouble();
+           try {
+               // ── 获取查询参数：规则名称（默认 "shouzhe"） ──
+               auto rule_name = req->getParameter("rule");
+               if (rule_name.empty()) {
+                   rule_name = "shouzhe";  // 默认规则
+               }
 
-        // ── 守拙理念：计算资产配置 ──
-        // 黄金固定 10%
-        const double gold = 0.10;
-        // 债券 = 年龄十位数 × 10%（20岁→20%, 30岁→30%, …）
-        const int age_decade = (age / 10) * 10;
-        const double bond = (std::min)((std::max)(age_decade / 100.0, 0.0), 0.80);
-        // 股票 = 余量
-        const double equity = (std::max)(1.0 - gold - bond, 0.0);
+               // ── 获取当前持仓（可选） ──
+               Json::Value portfolio_json;
+               if (json_ptr->isMember("portfolio")) {
+                   portfolio_json = (*json_ptr)["portfolio"];
+               }
 
-        // 个股占总配置（不能超过 equity 部分）
-        double actual_stock_pick = 0.0;
-        if (investor_type == "experienced") {
-            actual_stock_pick = (std::min)(individual_pct, (std::min)(equity, 0.50));
-        } else if (investor_type == "professional") {
-            actual_stock_pick = (std::min)(individual_pct, equity);
-        }
-        // novice: 不允许个股
-        const double index_equity = equity - actual_stock_pick;
-        const double pick_equity = actual_stock_pick;
+               // ── 使用AllocationHandler处理请求 ──
+               Json::Value body = server::AllocationHandler::handle_plan_request(
+                   (*json_ptr)["profile"],
+                   portfolio_json,
+                   rule_name
+               );
 
-        // 指数比例：港股:A股:美股 = 1:3:16
-        const double total_ratio = 1.0 + 3.0 + 16.0;
-        const double hk = index_equity * (1.0 / total_ratio);
-        const double a_share = index_equity * (3.0 / total_ratio);
-        const double us = index_equity * (16.0 / total_ratio);
-
-        // ── 资格检查 & 风控 ──
-        Json::Value triggered_rules(Json::arrayValue);
-        std::string risk_status = "PASS";
-
-        if (investor_type == "experienced") {
-            if (exp_years == "0-5" || annual_ret == "0-10") {
-                triggered_rules.append("经验丰富投资人要求: >=5年经验 且 年化收益>=10%");
-                risk_status = "WARN";
-            }
-        } else if (investor_type == "professional") {
-            if (exp_years != "10+" || beat_sp500 != "yes") {
-                triggered_rules.append("专业投资人要求: >=10年经验 且 十年业绩跑赢标普500");
-                risk_status = "WARN";
-            }
-        }
-
-        // 单一资产不低于 2.5%（浮点容差 0.001）
-        const double min_asset = 0.025;
-        if (hk > 0.001 && hk < min_asset - 0.001) {
-            triggered_rules.append("港股指数占比 " + std::to_string(int(hk*100)) + "% 低于 2.5% 下限");
-            risk_status = "WARN";
-        }
-
-        // ── 生成 rationale ──
-        std::string rationale = "基于守拙价值多元化基金理念：年龄 " + std::to_string(age) +
-            " 岁 → 债券(VGIT) " + std::to_string(age_decade) + "%，黄金(GLD) 10%，" +
-            "股票 " + std::to_string(int(equity * 100)) + "%。";
-        if (investor_type == "novice") {
-            rationale += " 小白投资人：全部使用指数基金，不配个股。";
-        } else if (investor_type == "experienced") {
-            rationale += " 经验丰富投资人：个股占总配置 " + std::to_string(int(actual_stock_pick * 100)) + "%（上限" + std::to_string(int((std::min)(equity, 0.50) * 100)) + "%）。";
-        } else {
-            rationale += " 专业投资人：个股占总配置 " + std::to_string(int(actual_stock_pick * 100)) + "%（上限" + std::to_string(int(equity * 100)) + "%）。";
-        }
-        rationale += " 指数配比港股:A股:美股 = 1:3:16。";
-
-        // ── 生成调仓建议 ──
-        Json::Value actions(Json::arrayValue);
-        // 如果前端传了当前持仓，比对差异
-        if (json_ptr->isMember("portfolio") && (*json_ptr)["portfolio"].isArray()) {
-            const auto &portfolio = (*json_ptr)["portfolio"];
-            // 标准 ETF 集合
-            const std::set<std::string> standard_etfs = {"VOO", "\xe6\xb2\xaa\xe6\xb7\xb1""300", "\xe6\x81\x92\xe7\x94\x9f\xe6\x8c\x87\xe6\x95\xb0", "VGIT", "GLD"};
-            // 构建当前持仓 map，并累计个股持仓
-            std::map<std::string, double> current;
-            double current_stock_pick = 0.0;
-            for (const auto &item : portfolio) {
-                if (item.isMember("symbol") && item.isMember("weight")) {
-                    const auto sym = item["symbol"].asString();
-                    const auto w = item["weight"].asDouble();
-                    if (standard_etfs.count(sym)) {
-                        current[sym] = w;
-                    } else {
-                        // 非标准 ETF 归为个股持仓
-                        current_stock_pick += w;
-                    }
-                }
-            }
-            current["个股仓位"] = current_stock_pick;
-            // 构建目标配置 map
-            std::map<std::string, double> target;
-            target["VOO"] = us;
-            target["沪深300"] = a_share;
-            target["恒生指数"] = hk;
-            target["VGIT"] = bond;
-            target["GLD"] = gold;
-            target["个股仓位"] = pick_equity;
-
-            for (const auto &[sym, tw] : target) {
-                double cw = 0.0;
-                if (current.count(sym)) cw = current[sym];
-                double diff = tw - cw;
-                if (std::abs(diff) > 0.005) {
-                    std::string action = (diff > 0 ? "增持 " : "减持 ") + sym +
-                        "：" + std::to_string(int(cw * 100)) + "% → " + std::to_string(int(tw * 100)) + "%";
-                    actions.append(action);
-                }
-            }
-        }
-
-        // ── 构造响应 ──
-        Json::Value body;
-        body["proposed_portfolio"]["VOO"] = us;
-        body["proposed_portfolio"]["沪深300"] = a_share;
-        body["proposed_portfolio"]["恒生指数"] = hk;
-        body["proposed_portfolio"]["VGIT"] = bond;
-        body["proposed_portfolio"]["GLD"] = gold;
-        body["proposed_portfolio"]["个股仓位"] = pick_equity;
-        body["risk_report"]["status"] = risk_status;
-        body["risk_report"]["triggered_rules"] = triggered_rules;
-        body["rationale"] = rationale;
-        body["rebalancing_actions"] = actions;
-
-        auto resp = HttpResponse::newHttpJsonResponse(body);
+               auto resp = HttpResponse::newHttpJsonResponse(body);
         resp->addHeader("X-Trace-Id", trace_id);
         cb(resp);
         const auto latency_ms = std::chrono::duration<double, std::milli>(
@@ -308,6 +201,20 @@ void setup_routes() {
                                     .count();
         log_request_metrics(trace_id, route, resp->getStatusCode(), latency_ms);
         g_concurrency_limiter.release();
+           } catch (const std::exception &e) {
+               Json::Value err;
+               err["error"] = "allocation_error";
+               err["message"] = e.what();
+               auto resp = HttpResponse::newHttpJsonResponse(err);
+               resp->setStatusCode(k400BadRequest);
+               resp->addHeader("X-Trace-Id", trace_id);
+               cb(resp);
+               const auto latency_ms = std::chrono::duration<double, std::milli>(
+                                           std::chrono::steady_clock::now() - start)
+                                           .count();
+               log_request_metrics(trace_id, route, 400, latency_ms);
+               g_concurrency_limiter.release();
+           }
     // 指定该路由仅支持 POST 方法
     }, {Post});
 

@@ -1,0 +1,48 @@
+{
+  "rows": [
+    {
+      "net_income": 2155000000.0,
+      "source": "alpha_vantage",
+      "year": 2017
+    },
+    {
+      "net_income": 1112000000.0,
+      "source": "alpha_vantage",
+      "year": 2018
+    },
+    {
+      "net_income": 7011000000.0,
+      "source": "alpha_vantage",
+      "year": 2019
+    },
+    {
+      "net_income": -3247000000.0,
+      "source": "alpha_vantage",
+      "year": 2020
+    },
+    {
+      "net_income": -550000000.0,
+      "source": "alpha_vantage",
+      "year": 2021
+    },
+    {
+      "net_income": 1403000000.0,
+      "source": "alpha_vantage",
+      "year": 2022
+    },
+    {
+      "net_income": 9918000000.0,
+      "source": "alpha_vantage",
+      "year": 2023
+    },
+    {
+      "net_income": 17067000000.0,
+      "source": "alpha_vantage",
+      "year": 2024
+    }
+  ],
+  "source": "alpha_vantage",
+  "symbol": "TCOM",
+  "updated_at": "2026-03-27T07:20:55Z",
+  "updated_ts": 1774596055
+}

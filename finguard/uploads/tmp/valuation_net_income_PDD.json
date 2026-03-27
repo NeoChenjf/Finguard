@@ -1,0 +1,48 @@
+{
+  "rows": [
+    {
+      "net_income": -525115000.0,
+      "source": "alpha_vantage",
+      "year": 2017
+    },
+    {
+      "net_income": -10217125000.0,
+      "source": "alpha_vantage",
+      "year": 2018
+    },
+    {
+      "net_income": -6967603000.0,
+      "source": "alpha_vantage",
+      "year": 2019
+    },
+    {
+      "net_income": -7179742000.0,
+      "source": "alpha_vantage",
+      "year": 2020
+    },
+    {
+      "net_income": 7768670000.0,
+      "source": "alpha_vantage",
+      "year": 2021
+    },
+    {
+      "net_income": 31538062000.0,
+      "source": "alpha_vantage",
+      "year": 2022
+    },
+    {
+      "net_income": 60026544000.0,
+      "source": "alpha_vantage",
+      "year": 2023
+    },
+    {
+      "net_income": 112434512000.0,
+      "source": "alpha_vantage",
+      "year": 2024
+    }
+  ],
+  "source": "alpha_vantage",
+  "symbol": "PDD",
+  "updated_at": "2026-03-27T07:21:33Z",
+  "updated_ts": 1774596093
+}

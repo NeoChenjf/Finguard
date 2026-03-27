@@ -1,0 +1,91 @@
+{
+    "analysis_time_ms":  3691,
+    "book_value_per_share":  498660.0,
+    "current_pe":  15.34,
+    "current_peg":  10.06,
+    "data_source":  "alpha_vantage",
+    "debt_ratio":  0.41112982090959077,
+    "earnings_growth":  -1.0,
+    "eps":  31.050000000000001,
+    "growth_5y_cagr":  0.14532839308909096,
+    "historical_pe_mean":  16.006655977160076,
+    "investment_conclusion":  "## Value Cell 分析报告 — BRK-B\n\n| 指标 | 值 |\n|------|----|\n| 定性评分 | N/A |\n| 股价 | N/A |\n| EPS | 31.05 |\n| 每股净资产 (BVPS) | 498660.00 |\n| 负债率 | 41.11% |\n| 最近3年净利润均值 | 84062000000.00 |\n| 倒退5年前3年净利润均值 | 42653000000.00 |\n| 5年CAGR | 14.53% |\n| 当前 PE | N/A |\n| 当前 PEG | N/A |\n| 市净率 (PB) | 1.43 |\n| 安全边际判定 | ❌ No |\n| 数据来源 | alpha_vantage |\n\n### 安全边际分析\n当前 PE=15.34，历史均值=16.0067，PEG=10.06。当前 PE 低于历史均值（✅）；PEG ≥ 1.0，增长已被充分定价（❌）→ 不在安全边际区间。\n\n### 核心投资结论\n（LLM 分析暂不可用）\n\n### 定性分析\n- **护城河**：N/A\n- **管理层**：N/A\n- **商业模式**：N/A\n",
+    "net_profit_8y":  [
+                          4021000000.0,
+                          81417000000.0,
+                          42521000000.0,
+                          89795000000.0,
+                          -22819000000.0,
+                          96223000000.0,
+                          88995000000.0,
+                          66968000000.0
+                      ],
+    "net_profit_history":  [
+                               {
+                                   "net_income":  4021000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2018
+                               },
+                               {
+                                   "net_income":  81417000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2019
+                               },
+                               {
+                                   "net_income":  42521000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2020
+                               },
+                               {
+                                   "net_income":  89795000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2021
+                               },
+                               {
+                                   "net_income":  -22819000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2022
+                               },
+                               {
+                                   "net_income":  96223000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2023
+                               },
+                               {
+                                   "net_income":  88995000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2024
+                               },
+                               {
+                                   "net_income":  66968000000.0,
+                                   "source":  "alpha_vantage",
+                                   "year":  2025
+                               }
+                           ],
+    "net_profit_source":  "alpha_vantage",
+    "net_profit_updated_at":  "2026-03-26T15:49:14Z",
+    "np_past3_avg":  42653000000.0,
+    "np_recent3_avg":  84062000000.0,
+    "pe":  -1.0,
+    "pe_history_quarters_used":  6,
+    "peg":  -1.0,
+    "price":  -1.0,
+    "price_to_book":  1.4319999999999999,
+    "qualitative_analysis":  {
+                                 "business_model":  "",
+                                 "management":  "",
+                                 "moat":  ""
+                             },
+    "qualitative_score":  -1.0,
+    "safety_margin":  false,
+    "safety_margin_reason":  "当前 PE=15.34，历史均值=16.0067，PEG=10.06。当前 PE 低于历史均值（✅）；PEG ≥ 1.0，增长已被充分定价（❌）→ 不在安全边际区间。",
+    "search_warning":  "no_tavily_api_key",
+    "symbol":  "BRK-B",
+    "total_assets":  1222176000000.0,
+    "total_liabilities":  502473000000.0,
+    "valuation_label":  "unknown",
+    "warnings":  [
+                     "alpha_balance_sheet_error",
+                     "debt_ratio_source_yahoo_finance"
+                 ]
+}
