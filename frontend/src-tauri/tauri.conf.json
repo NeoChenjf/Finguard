@@ -39,21 +39,15 @@
       "binaries/finguard"
     ],
     "resources": {
-      "binaries/brotlicommon.dll": "./",
-      "binaries/brotlidec.dll": "./",
-      "binaries/brotlienc.dll": "./",
-      "binaries/cares.dll": "./",
-      "binaries/drogon.dll": "./",
-      "binaries/jsoncpp.dll": "./",
-      "binaries/libcrypto-3-x64.dll": "./",
-      "binaries/libssl-3-x64.dll": "./",
-      "binaries/trantor.dll": "./",
-      "binaries/zlib1.dll": "./",
-      "binaries/config/*": "config/"
+      "binaries/*.dll": "./",
+      "binaries/config/*": "config/",
+      "../../finguard/data/*": "data/",
+      "../../finguard/data/examples/*": "data/examples/"
     },
     "windows": {
       "webviewInstallMode": {
-        "type": "skip"
+        "type": "downloadBootstrapper",
+        "silent": true
       }
     }
   },

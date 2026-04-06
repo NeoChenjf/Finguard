@@ -15,6 +15,11 @@ export default function SettingsPage() {
   const [temperature, setTemperature] = useState(0.7);
   const [timeoutMs, setTimeoutMs] = useState(30000);
   const [apiKeyHint, setApiKeyHint] = useState('');
+  const [valuecellDbProfile, setValuecellDbProfile] = useState('main');
+  const [valuecellDbProfiles, setValuecellDbProfiles] = useState<Awaited<
+    ReturnType<typeof getSettings>
+  >['valuecell_db_profiles']>([]);
+  const [valuecellDbPathHint, setValuecellDbPathHint] = useState('');
   const [showKey, setShowKey] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -29,6 +34,9 @@ export default function SettingsPage() {
         setTemperature(s.temperature);
         setTimeoutMs(s.timeout_ms);
         setApiKeyHint(s.api_key_hint);
+        setValuecellDbProfile(s.valuecell_db_profile || 'main');
+        setValuecellDbProfiles(s.valuecell_db_profiles || []);
+        setValuecellDbPathHint(s.valuecell_db_path_hint || '');
       })
       .catch(() => {});
   }, []);
@@ -42,6 +50,7 @@ export default function SettingsPage() {
         model,
         temperature,
         timeout_ms: timeoutMs,
+        valuecell_db_profile: valuecellDbProfile,
       };
       // 只在用户明确输入了新的 API Key 时才发送
       if (apiKeyInput.trim()) {
@@ -55,6 +64,7 @@ export default function SettingsPage() {
         model,
         temperature,
         timeout_ms: timeoutMs,
+        valuecell_db_profile: valuecellDbProfile,
         ...(apiKeyInput.trim() ? { api_key: apiKeyInput.trim() } : {}),
       });
 
@@ -73,7 +83,14 @@ export default function SettingsPage() {
         temperature: updated.temperature,
         timeout_ms: updated.timeout_ms,
         api_key_hint: updated.api_key_hint,
+        valuecell_db_profile: updated.valuecell_db_profile,
+        valuecell_db_profile_active: updated.valuecell_db_profile_active,
+        valuecell_db_profile_label: updated.valuecell_db_profile_label,
+        valuecell_db_path_hint: updated.valuecell_db_path_hint,
+        valuecell_db_profiles: updated.valuecell_db_profiles,
       });
+      setValuecellDbProfiles(updated.valuecell_db_profiles || []);
+      setValuecellDbPathHint(updated.valuecell_db_path_hint || '');
 
       setApiKeyInput('');
       setToast({ type: 'success', msg: '设置已保存并立即生效' });
@@ -109,6 +126,62 @@ export default function SettingsPage() {
         )}
 
         <div className="space-y-6">
+          {/* ValueCell Database Profile */}
+          <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+            <div className="mb-3">
+              <h2 className="text-sm font-semibold text-gray-200">ValueCell 数据库</h2>
+              <p className="mt-1 text-xs text-gray-500">
+                选择前端验证时使用的数据库 profile。Demo profile 适合直接验证 SQLite 数据库表现。
+              </p>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  数据库 Profile
+                </label>
+                <select
+                  value={valuecellDbProfile}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setValuecellDbProfile(next);
+                    const matched = valuecellDbProfiles.find((item) => item.key === next);
+                    setValuecellDbPathHint(matched?.path_hint ?? '');
+                  }}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  {valuecellDbProfiles.map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {valuecellDbProfiles.length > 0 && (
+                <div className="rounded-lg border border-gray-800 bg-gray-950/50 px-3 py-2.5 text-xs text-gray-400 space-y-1">
+                  <div>
+                    当前说明：
+                    <span className="ml-1 text-gray-300">
+                      {valuecellDbProfiles.find((item) => item.key === valuecellDbProfile)?.description ??
+                        'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    路径提示：
+                    <span className="ml-1 font-mono break-all text-gray-500">
+                      {valuecellDbPathHint || 'N/A'}
+                    </span>
+                  </div>
+                  {valuecellDbProfiles.find((item) => item.key === valuecellDbProfile)?.is_demo && (
+                    <div className="text-amber-300">
+                      当前选择为 demo profile，用于前端直接验证数据库效果；当前样本覆盖仍为本地演示数据。
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* API Key */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">API Key</label>

@@ -79,7 +79,6 @@
     "qualitative_score":  -1.0,
     "safety_margin":  false,
     "safety_margin_reason":  "当前 PE=7.42，历史均值=8.68032，PEG=1.911。当前 PE 低于历史均值（✅）；PEG ≥ 1.0，增长已被充分定价（❌）→ 不在安全边际区间。",
-    "search_warning":  "no_tavily_api_key",
     "symbol":  "TCOM",
     "total_assets":  242581000000.0,
     "total_liabilities":  99099000000.0,

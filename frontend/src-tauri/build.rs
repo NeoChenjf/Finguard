@@ -21,31 +21,37 @@ fn copy_sidecar_dlls() {
         .ancestors()
         .nth(3)
         .expect("cannot resolve target dir from OUT_DIR");
+    let binaries_dir = manifest.join("binaries");
 
-    let dlls: &[&str] = &[
-        "brotlicommon.dll",
-        "brotlidec.dll",
-        "brotlienc.dll",
-        "cares.dll",
-        "drogon.dll",
-        "jsoncpp.dll",
-        "libcrypto-3-x64.dll",
-        "libssl-3-x64.dll",
-        "trantor.dll",
-        "zlib1.dll",
-    ];
+    std::fs::create_dir_all(&binaries_dir).expect("failed to create binaries dir");
 
-    for dll in dlls {
-        let src = dll_src.join(dll);
-        if src.exists() {
-            let dst = target_dir.join(dll);
-            std::fs::copy(&src, &dst).unwrap_or_else(|e| {
-                panic!("failed to copy {}: {e}", src.display())
-            });
-            println!("cargo:warning=copied sidecar DLL: {dll}");
-        } else {
-            println!("cargo:warning=sidecar DLL not found: {}", src.display());
+    let entries = std::fs::read_dir(&dll_src).unwrap_or_else(|e| {
+        panic!("failed to read sidecar DLL dir {}: {e}", dll_src.display())
+    });
+    for entry in entries.flatten() {
+        let src = entry.path();
+        let is_dll = src
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.eq_ignore_ascii_case("dll"))
+            .unwrap_or(false);
+        if !is_dll {
+            continue;
         }
+        let file_name = entry.file_name();
+        let dll_name = file_name.to_string_lossy();
+
+        let target_dst = target_dir.join(&file_name);
+        std::fs::copy(&src, &target_dst).unwrap_or_else(|e| {
+            panic!("failed to copy {} to {}: {e}", src.display(), target_dst.display())
+        });
+
+        let binary_dst = binaries_dir.join(&file_name);
+        std::fs::copy(&src, &binary_dst).unwrap_or_else(|e| {
+            panic!("failed to copy {} to {}: {e}", src.display(), binary_dst.display())
+        });
+
+        println!("cargo:warning=synced sidecar DLL: {dll_name}");
     }
 
     // 仅在源 DLL 目录变化时重跑

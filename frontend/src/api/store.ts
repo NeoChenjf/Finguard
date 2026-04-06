@@ -9,6 +9,9 @@ export interface PersistedSettings {
   temperature: number;
   timeout_ms: number;
   api_key: string;
+  valuecell_db_profile: string;
+  valuecell_state?: any;
+  plan_state?: any;
 }
 
 const STORE_FILE = 'settings.json';
@@ -77,4 +80,24 @@ export async function clearPersistedSettings(): Promise<void> {
   } else {
     localStorage.removeItem(LS_KEY);
   }
+}
+
+/** 保存页面状态到持久化存储 */
+export async function savePageState(
+  key: 'valuecell_state' | 'plan_state',
+  state: any
+): Promise<void> {
+  const current = await loadPersistedSettings();
+  await savePersistedSettings({
+    ...current,
+    [key]: state,
+  });
+}
+
+/** 从持久化存储加载页面状态 */
+export async function loadPageState<T>(
+  key: 'valuecell_state' | 'plan_state'
+): Promise<T | null> {
+  const settings = await loadPersistedSettings();
+  return (settings?.[key] as T) ?? null;
 }

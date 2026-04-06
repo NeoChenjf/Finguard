@@ -38,13 +38,17 @@ export default function StartupPage() {
         if (isTauri()) {
           try {
             const persisted = await loadPersistedSettings();
-            if (persisted && (persisted.api_key || persisted.api_base)) {
+            if (
+              persisted &&
+              (persisted.api_key || persisted.api_base || persisted.valuecell_db_profile)
+            ) {
               await postSettings({
                 api_key: persisted.api_key,
                 api_base: persisted.api_base,
                 model: persisted.model,
                 temperature: persisted.temperature,
                 timeout_ms: persisted.timeout_ms,
+                valuecell_db_profile: persisted.valuecell_db_profile,
               });
             }
           } catch {
@@ -55,6 +59,9 @@ export default function StartupPage() {
         // 获取最新设置
         try {
           const settings = await getSettings();
+          const dbProfiles = Array.isArray(settings.valuecell_db_profiles)
+            ? settings.valuecell_db_profiles
+            : [];
           if (!cancelled) {
             setSettings({
               api_base: settings.api_base,
@@ -62,6 +69,11 @@ export default function StartupPage() {
               temperature: settings.temperature,
               timeout_ms: settings.timeout_ms,
               api_key_hint: settings.api_key_hint,
+              valuecell_db_profile: settings.valuecell_db_profile,
+              valuecell_db_profile_active: settings.valuecell_db_profile_active,
+              valuecell_db_profile_label: settings.valuecell_db_profile_label,
+              valuecell_db_path_hint: settings.valuecell_db_path_hint,
+              valuecell_db_profiles: dbProfiles,
             });
             setHasApiKey(settings.api_key_configured);
           }

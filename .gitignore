@@ -17,3 +17,5 @@ package-lock.json
 
 # Ignore local LLM config containing API keys
 finguard/config/llm.json
+finguard/data/*.db
+finguard/data/examples/*.db

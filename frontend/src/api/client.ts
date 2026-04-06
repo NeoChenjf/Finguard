@@ -20,6 +20,18 @@ export interface SettingsResponse {
   timeout_ms: number;
   api_key_configured: boolean;
   api_key_hint: string;
+  valuecell_db_profile: string;
+  valuecell_db_profile_active?: string;
+  valuecell_db_profile_label?: string;
+  valuecell_db_path_hint: string;
+  valuecell_db_profiles: Array<{
+    key: string;
+    label: string;
+    description: string;
+    path_hint: string;
+    exists: boolean;
+    is_demo: boolean;
+  }>;
 }
 
 export interface PlanRequest {
@@ -121,6 +133,8 @@ export interface ValueCellRequest {
 
 export interface ValueCellResponse {
   symbol: string;
+  db_profile?: string;
+  db_profile_label?: string;
   book_value_per_share: number;
   eps: number;
   price: number;

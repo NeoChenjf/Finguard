@@ -2,7 +2,7 @@
 # 指定所需的最低 CMake 版本
 cmake_minimum_required(VERSION 3.20)
 # 定义项目名为 finguard，使用 C++ 语言
-project(finguard LANGUAGES CXX)
+project(finguard LANGUAGES C CXX)
 
 # 设置 C++ 标准为 C++17
 set(CMAKE_CXX_STANDARD 17)
@@ -18,12 +18,24 @@ find_package(spdlog CONFIG REQUIRED)        # 查找 spdlog 日志库
 
 # ========== 核心静态库（不含 main.cpp）==========
 add_library(finguard_core STATIC
+    third_party/sqlite/sqlite3.c
+    src/data/fundamentals_db.cpp
     src/llm/llm_client.cpp
+    src/llm/llm_client_common.cpp
+    src/llm/llm_client_config.cpp
+    src/llm/llm_client_stream.cpp
     src/risk/profile_store.cpp
     src/risk/rule_engine.cpp
     src/server/http_server.cpp
     src/server/routes.cpp
-        src/server/allocation_handler.cpp
+    src/server/route_support.cpp
+    src/server/health_routes.cpp
+    src/server/plan_routes.cpp
+    src/server/profile_routes.cpp
+    src/server/chat_routes.cpp
+    src/server/system_routes.cpp
+    src/server/valuecell_routes.cpp
+    src/server/allocation_handler.cpp
     src/util/simple_yaml.cpp
     src/util/reliability_config.cpp
     src/util/token_bucket.cpp
@@ -33,8 +45,13 @@ add_library(finguard_core STATIC
     # Phase 10: Value Cell 量化价值分析
     src/valuation/valuation_config.cpp
     src/valuation/proxy_config.cpp
+    src/valuation/fundamentals_db_client.cpp
     src/valuation/yahoo_finance_client.cpp
-    src/valuation/search_wrapper.cpp
+    src/valuation/yahoo_finance_client_common.cpp
+    src/valuation/yahoo_finance_quote_sources.cpp
+    src/valuation/yahoo_finance_balance_sheet_sources.cpp
+    src/valuation/yahoo_finance_net_income_sources.cpp
+    src/valuation/analysis_workflow.cpp
     src/valuation/safety_margin.cpp
     src/valuation/valuation_handler.cpp
     # Asset Allocation Multi-Rules: 多规则资产配置框架
@@ -43,7 +60,7 @@ add_library(finguard_core STATIC
     src/core/rules/shouzhe_rule.cpp
     src/core/rules/fixed_rules.cpp
 )
-target_include_directories(finguard_core PUBLIC src)
+target_include_directories(finguard_core PUBLIC src third_party/sqlite)
 target_link_libraries(finguard_core
     PUBLIC
         Drogon::Drogon
@@ -98,9 +115,12 @@ if(BUILD_TESTS)
         tests/test_rules.cpp
         tests/test_cache.cpp
         tests/test_llm_config.cpp
+        tests/test_llm_helpers.cpp
         tests/test_token_bucket.cpp
         tests/test_circuit_breaker.cpp
         tests/test_valuation_metrics.cpp
+        tests/test_route_support.cpp
+        tests/test_fundamentals_db.cpp
     )
     target_link_libraries(finguard_tests
         PRIVATE
@@ -110,3 +130,4 @@ if(BUILD_TESTS)
     include(GoogleTest)                        # 包含 GoogleTest CMake 模块
     gtest_discover_tests(finguard_tests)       # 自动发现并注册测试用例
 endif()
+

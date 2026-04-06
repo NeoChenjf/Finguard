@@ -1,6 +1,6 @@
 {
     "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "api_key": "sk-5bc9d624881c47279101ceb669e6d32c",
+    "api_key": "",
     "curl_path": "curl.exe",
     "http_proxy": "",
     "model": "qwen-plus",

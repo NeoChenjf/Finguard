@@ -29,39 +29,94 @@ fn appdata_work_dir() -> PathBuf {
     PathBuf::from(appdata).join("finguard")
 }
 
-/// 首次启动时，将安装目录的 config/ 复制到 AppData 工作目录
-fn ensure_config_in_appdata(install_dir: &Path) {
+/// 递归复制目录
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if !dst.exists() {
+        std::fs::create_dir_all(dst)?;
+    }
+
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+/// 首次启动时，将安装目录的 config/ 和 data/ 复制到 AppData 工作目录
+fn ensure_resources_in_appdata(install_dir: &Path) {
+    let appdata_dir = appdata_work_dir();
+
+    // 1. 复制 config/ 目录
     let src_config = install_dir.join("config");
-    let dst_config = appdata_work_dir().join("config");
+    let dst_config = appdata_dir.join("config");
 
     if dst_config.join("llm.json").exists() {
         // 已存在，跳过复制（用户可能已修改过配置）
         println!("[config] AppData config already exists, skipping copy");
-        return;
-    }
-
-    // 创建目标目录
-    if let Err(e) = std::fs::create_dir_all(&dst_config) {
-        println!("[config] failed to create {}: {e}", dst_config.display());
-        return;
-    }
-
-    // 复制每个配置文件
-    if src_config.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&src_config) {
-            for entry in entries.flatten() {
-                let src_file = entry.path();
-                if src_file.is_file() {
-                    let dst_file = dst_config.join(entry.file_name());
-                    match std::fs::copy(&src_file, &dst_file) {
-                        Ok(_) => println!("[config] copied {} → {}", src_file.display(), dst_file.display()),
-                        Err(e) => println!("[config] failed to copy {}: {e}", src_file.display()),
+    } else {
+        // 创建目标目录
+        if let Err(e) = std::fs::create_dir_all(&dst_config) {
+            println!("[config] failed to create {}: {e}", dst_config.display());
+        } else {
+            // 复制每个配置文件
+            if src_config.is_dir() {
+                if let Ok(entries) = std::fs::read_dir(&src_config) {
+                    for entry in entries.flatten() {
+                        let src_file = entry.path();
+                        if src_file.is_file() {
+                            let dst_file = dst_config.join(entry.file_name());
+                            match std::fs::copy(&src_file, &dst_file) {
+                                Ok(_) => println!("[config] copied {} → {}", src_file.display(), dst_file.display()),
+                                Err(e) => println!("[config] failed to copy {}: {e}", src_file.display()),
+                            }
+                        }
                     }
                 }
+            } else {
+                println!("[config] source config not found: {}", src_config.display());
+            }
+        }
+    }
+
+    // 2. 复制 data/fundamentals.db（主数据库）
+    let src_main_db = install_dir.join("data").join("fundamentals.db");
+    let dst_main_db = appdata_dir.join("data").join("fundamentals.db");
+
+    if dst_main_db.exists() {
+        println!("[data] main database already exists, skipping copy (preserving user data)");
+    } else if src_main_db.exists() {
+        if let Err(e) = std::fs::create_dir_all(dst_main_db.parent().unwrap()) {
+            println!("[data] failed to create data directory: {e}");
+        } else {
+            match std::fs::copy(&src_main_db, &dst_main_db) {
+                Ok(_) => println!("[data] copied main database {} → {}", src_main_db.display(), dst_main_db.display()),
+                Err(e) => println!("[data] failed to copy main database: {e}"),
             }
         }
     } else {
-        println!("[config] source config not found: {}", src_config.display());
+        println!("[data] source main database not found: {}", src_main_db.display());
+    }
+
+    // 3. 复制 data/examples/ 目录（demo 数据库）
+    let src_examples = install_dir.join("data").join("examples");
+    let dst_examples = appdata_dir.join("data").join("examples");
+
+    if dst_examples.exists() {
+        println!("[data] examples directory already exists, skipping copy");
+    } else if src_examples.exists() {
+        match copy_dir_recursive(&src_examples, &dst_examples) {
+            Ok(_) => println!("[data] copied examples directory {} → {}", src_examples.display(), dst_examples.display()),
+            Err(e) => println!("[data] failed to copy examples directory: {e}"),
+        }
+    } else {
+        println!("[data] source examples directory not found: {}", src_examples.display());
     }
 }
 
@@ -74,8 +129,8 @@ fn sidecar_dir(app: &AppHandle) -> std::path::PathBuf {
     let exe_dir = exe.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
 
     if is_production() {
-        // 生产模式：首次复制 config → AppData，返回 AppData 路径
-        ensure_config_in_appdata(&exe_dir);
+        // 生产模式：首次复制 config 和 data → AppData，返回 AppData 路径
+        ensure_resources_in_appdata(&exe_dir);
         let work_dir = appdata_work_dir();
         println!("[sidecar] production mode, cwd = {}", work_dir.display());
         let _ = app;

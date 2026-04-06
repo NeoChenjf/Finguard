@@ -1,12 +1,10 @@
 {
-  "tavily_api_key": "",
   "alpha_vantage_api_key": "",
   "finnhub_api_key": "",
   "us_stocks_data_source_priority": ["yahoo_finance", "alpha_vantage", "finnhub", "simfin"],
   "net_income_cache_ttl_hours": 24,
   "yahoo_timeout_ms": 10000,
-  "search_max_results": 5,
   "pe_history_quarters": 6,
-  "qualitative_prompt_language": "zh",
-  "http_proxy": "http://127.0.0.1:7890"
+  "http_proxy": "http://127.0.0.1:7890",
+  "valuecell_db_profile": "main"
 }

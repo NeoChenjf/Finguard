@@ -79,7 +79,6 @@
     "qualitative_score":  -1.0,
     "safety_margin":  false,
     "safety_margin_reason":  "当前 PE=15.34，历史均值=16.0067，PEG=10.06。当前 PE 低于历史均值（✅）；PEG ≥ 1.0，增长已被充分定价（❌）→ 不在安全边际区间。",
-    "search_warning":  "no_tavily_api_key",
     "symbol":  "BRK-B",
     "total_assets":  1222176000000.0,
     "total_liabilities":  502473000000.0,

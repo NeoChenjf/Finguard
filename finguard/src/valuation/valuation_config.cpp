@@ -47,21 +47,22 @@ ValuationConfig load_valuation_config() {
     try {
         nlohmann::json j;
         f >> j;
-        cfg.tavily_api_key          = j.value("tavily_api_key", "");
         cfg.alpha_vantage_api_key   = j.value("alpha_vantage_api_key", "");
         cfg.finnhub_api_key         = j.value("finnhub_api_key", "");
         cfg.yahoo_timeout_ms        = j.value("yahoo_timeout_ms", 5000);
-        cfg.search_max_results      = j.value("search_max_results", 5);
         cfg.pe_history_quarters     = j.value("pe_history_quarters", 6);
-        cfg.qualitative_prompt_language = j.value("qualitative_prompt_language", "zh");
         cfg.http_proxy              = j.value("http_proxy", "");
         cfg.us_stocks_data_source_priority =
             j.value("us_stocks_data_source_priority",
                     std::vector<std::string>{"yahoo_finance", "alpha_vantage", "finnhub", "simfin"});
         cfg.net_income_cache_ttl_hours = j.value("net_income_cache_ttl_hours", 24);
+        cfg.valuecell_db_profile = trim_copy(j.value("valuecell_db_profile", "main"));
 
         if (cfg.us_stocks_data_source_priority.empty()) {
             cfg.us_stocks_data_source_priority = {"yahoo_finance", "alpha_vantage", "finnhub", "simfin"};
+        }
+        if (cfg.valuecell_db_profile.empty()) {
+            cfg.valuecell_db_profile = "main";
         }
     } catch (...) {
         // JSON 解析失败：使用默认值，后续请求会缺少 API key 而优雅降级

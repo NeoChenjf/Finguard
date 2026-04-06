@@ -21,6 +21,8 @@ struct FinancialMetrics {
     };
 
     std::string symbol;
+    std::string db_profile;
+    std::string db_profile_label;
 
     // 旧版估值指标（保留兼容）
     double trailing_pe = -1.0;       // 当前 trailing P/E

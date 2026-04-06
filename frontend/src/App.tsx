@@ -4,7 +4,6 @@ import Layout from './components/Layout';
 import StartupPage from './pages/StartupPage';
 import SettingsPage from './pages/SettingsPage';
 import PlanPage from './pages/PlanPage';
-import ChatPage from './pages/ChatPage';
 import ValueCellPage from './pages/ValueCellPage';
 
 export default function App() {
@@ -26,10 +25,9 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/plan" element={<PlanPage />} />
-          <Route path="/chat" element={<ChatPage />} />
           <Route path="/valuecell" element={<ValueCellPage />} />
           {/* 首次启动未配置 API Key → 引导至设置页 */}
-          <Route path="*" element={<Navigate to={hasApiKey ? '/chat' : '/settings'} replace />} />
+          <Route path="*" element={<Navigate to={hasApiKey ? '/valuecell' : '/settings'} replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

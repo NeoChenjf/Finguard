@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sqlite3 /d/AI_Investment/finguard/data/fundamentals.db \"SELECT name FROM sqlite_master WHERE type='table';\")",
+      "Bash(sqlite3 /d/AI_Investment/finguard/data/fundamentals.db \"SELECT COUNT\\(*\\) as table_count FROM sqlite_master WHERE type='table';\")",
+      "Bash(sqlite3 /d/AI_Investment/finguard/data/fundamentals.db \"SELECT COUNT\\(*\\) FROM companies;\")",
+      "Bash(python scripts/seed_fundamentals_db.py --symbols TCOM BRK-B PDD --reset)",
+      "Bash(sqlite3 finguard/data/fundamentals.db \"SELECT symbol, company_name FROM companies;\")",
+      "Bash(python -c \"import sqlite3; conn = sqlite3.connect\\('finguard/data/fundamentals.db'\\); cursor = conn.cursor\\(\\); cursor.execute\\('SELECT symbol, company_name FROM companies'\\); print\\('\\\\n'.join\\([f'{row[0]}: {row[1]}' for row in cursor.fetchall\\(\\)]\\)\\); conn.close\\(\\)\")",
+      "Bash(npm run:*)",
+      "Bash(cargo build:*)",
+      "Bash(python -c \"import sqlite3; conn = sqlite3.connect\\('finguard/data/fundamentals.db'\\); cursor = conn.cursor\\(\\); cursor.execute\\('SELECT COUNT\\(*\\) FROM companies'\\); print\\(f'Companies: {cursor.fetchone\\(\\)[0]}'\\); cursor.execute\\('SELECT COUNT\\(*\\) FROM annual_fundamentals'\\); print\\(f'Annual records: {cursor.fetchone\\(\\)[0]}'\\); cursor.execute\\('SELECT COUNT\\(*\\) FROM latest_quote_metrics'\\); print\\(f'Quote records: {cursor.fetchone\\(\\)[0]}'\\); conn.close\\(\\)\")",
+      "Bash(python -c \"import sqlite3; conn = sqlite3.connect\\('frontend/src-tauri/target/debug/data/fundamentals.db'\\); cursor = conn.cursor\\(\\); cursor.execute\\('SELECT symbol, company_name FROM companies'\\); print\\('\\\\n'.join\\([f'{row[0]}: {row[1]}' for row in cursor.fetchall\\(\\)]\\)\\); conn.close\\(\\)\")"
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 #pragma once
 
-// 外部 HTTP 请求的代理信息（用于 Yahoo Finance、Tavily 等）
+// 外部 HTTP 请求的代理信息（用于 Yahoo Finance、Alpha Vantage、Finnhub 等）
 // 格式与 llm_client 保持一致
 #include <string>
 #include <cstdint>

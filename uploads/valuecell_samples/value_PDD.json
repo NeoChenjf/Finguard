@@ -79,7 +79,6 @@
     "qualitative_score":  -1.0,
     "safety_margin":  false,
     "safety_margin_reason":  "当前 PE=9.8，历史均值=10.0801，PEG=1.029。当前 PE 低于历史均值（✅）；PEG ≥ 1.0，增长已被充分定价（❌）→ 不在安全边际区间。",
-    "search_warning":  "no_tavily_api_key",
     "symbol":  "PDD",
     "total_assets":  505034316000.0,
     "total_liabilities":  191721192000.0,

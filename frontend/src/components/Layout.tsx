@@ -1,9 +1,8 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { MessageSquare, Settings, PieChart, Activity, Shield, TrendingUp } from 'lucide-react';
+import { Settings, PieChart, Activity, Shield, TrendingUp } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 
 const navItems = [
-  { to: '/chat', icon: MessageSquare, label: '投研问答' },
   { to: '/plan', icon: PieChart, label: '配置建议' },
   { to: '/valuecell', icon: TrendingUp, label: '价值分析' },
   { to: '/settings', icon: Settings, label: '设置' },

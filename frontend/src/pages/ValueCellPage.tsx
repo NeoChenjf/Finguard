@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Search,
   Loader2,
@@ -8,7 +8,10 @@ import {
   Clock,
   Star,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { postValueCell, type ValueCellResponse } from '../api/client';
+import { useAppStore } from '../store/useAppStore';
 
 type RuleStatus = 'pass' | 'observe' | 'fail' | 'na';
 
@@ -58,6 +61,15 @@ function formatWarning(code: string): string {
     finnhub_rate_limited: 'Finnhub 当前触发频率限制，请稍后重试。',
     quote_from_sample_cache: '当前行情主字段已从本地样本缓存补齐，用于避免页面出现大面积 N/A。',
     debt_ratio_from_sample_cache: '当前负债率已从本地样本缓存回填，用于避免页面出现缺失。',
+    db_symbol_not_found: '本地基本面数据库中不存在该 symbol，当前无法离线分析。',
+    db_insufficient_annual_history: '本地数据库中的年度财报历史不足 8 年，增长率口径会退化或不可完整解释。',
+    db_missing_latest_quote: '本地数据库缺少最新行情/估值摘要，PE / PEG 等字段可能显示为 N/A。',
+    db_stale_quote_metrics: '本地数据库中的 latest quote 已过旧，请执行离线刷新以更新估值字段。',
+    db_network_bootstrap_used: '本地数据库未提供完整数据，系统已自动联网抓取结构化财务数据用于本次分析。',
+    db_network_bootstrap_persisted: '本次联网抓取结果已自动回写主库，后续请求可优先离线读取。',
+    db_network_bootstrap_persist_failed: '本次联网抓取已成功，但回写数据库失败；本次仍使用抓取结果完成分析。',
+    db_demo_profile_autowrite_skipped: '当前使用 demo profile，为避免污染示例库，本次联网抓取未回写数据库。',
+    llm_general_knowledge_fallback: '数据库与自动抓取均未提供足够结构化数据，本次回答会更多依赖模型自身知识，局限性更高。',
   };
 
   return map[code] ?? code;
@@ -78,7 +90,7 @@ function getRuleStatus(result: ValueCellResponse, key: 'roe' | 'peg' | 'debt' | 
       return result.debt_ratio <= 0.5 ? 'pass' : 'fail';
     case 'pepb': {
       if (result.pe < 0 || result.price_to_book < 0) return 'na';
-      return result.pe * result.price_to_book < 2.25 ? 'pass' : 'fail';
+      return result.pe * result.price_to_book < 22.5 ? 'pass' : 'fail';
     }
     case 'cagr':
       if (result.growth_5y_cagr < 0) return 'na';
@@ -143,12 +155,34 @@ function WarningBar({ text }: { text: string }) {
 }
 
 export default function ValueCellPage() {
-  const [symbol, setSymbol] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ValueCellResponse | null>(null);
-  const [error, setError] = useState('');
+  const settings = useAppStore((s) => s.settings);
+  const valueCellState = useAppStore((s) => s.valueCellState);
+  const setValueCellState = useAppStore((s) => s.setValueCellState);
 
-  const quickSymbols = ['TCOM', 'PDD', 'BRK'];
+  const [symbol, setSymbol] = useState(valueCellState.symbol);
+  const [result, setResult] = useState<ValueCellResponse | null>(valueCellState.result);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const dbProfiles = Array.isArray(settings?.valuecell_db_profiles) ? settings.valuecell_db_profiles : [];
+
+  const activeDbProfile = result?.db_profile || settings?.valuecell_db_profile_active || settings?.valuecell_db_profile || 'main';
+  const activeDbProfileLabel =
+    result?.db_profile_label ||
+    settings?.valuecell_db_profile_label ||
+    dbProfiles.find((item) => item.key === activeDbProfile)?.label ||
+    '主库';
+  const isDemoProfile =
+    activeDbProfile !== 'main' &&
+    activeDbProfile !== 'env_override';
+
+  const quickSymbols =
+    activeDbProfile === 'tcom_demo'
+      ? ['TCOM']
+      : activeDbProfile === 'brk_b_demo'
+        ? ['BRK']
+        : activeDbProfile === 'pdd_demo'
+          ? ['PDD']
+          : ['TCOM', 'PDD', 'BRK'];
 
   const handleAnalyze = async (sym?: string) => {
     const target = (sym ?? symbol).trim().toUpperCase();
@@ -162,6 +196,12 @@ export default function ValueCellPage() {
     try {
       const data = await postValueCell(target);
       setResult(data);
+      // 保存到全局状态
+      setValueCellState({
+        symbol: target,
+        result: data,
+        lastAnalyzedAt: new Date().toISOString(),
+      });
     } catch (e) {
       setError((e as Error).message || '分析请求失败');
     } finally {
@@ -175,6 +215,33 @@ export default function ValueCellPage() {
       handleAnalyze();
     }
   };
+
+  // 持久化状态到 localStorage (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      import('../api/store').then(({ savePageState }) => {
+        savePageState('valuecell_state', {
+          symbol,
+          result,
+          lastAnalyzedAt: valueCellState.lastAnalyzedAt,
+        });
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [symbol, result, valueCellState.lastAnalyzedAt]);
+
+  // 从 localStorage 恢复状态
+  useEffect(() => {
+    import('../api/store').then(({ loadPageState }) => {
+      loadPageState<typeof valueCellState>('valuecell_state').then((saved) => {
+        if (saved && saved.symbol) {
+          setValueCellState(saved);
+          setSymbol(saved.symbol);
+          setResult(saved.result);
+        }
+      });
+    });
+  }, []);
 
   const warnings = result && Array.isArray(result.warnings) ? result.warnings : [];
 
@@ -196,7 +263,7 @@ export default function ValueCellPage() {
           detail: `当前负债率：${fmtPercent(result.debt_ratio)}`,
         },
         {
-          label: 'PE × PB < 2.25',
+          label: 'PE × PB < 22.5',
           status: getRuleStatus(result, 'pepb'),
           detail: result.pe >= 0 && result.price_to_book >= 0 ? `当前值：${(result.pe * result.price_to_book).toFixed(2)}` : '当前值：N/A',
         },
@@ -220,7 +287,27 @@ export default function ValueCellPage() {
         <p className="mt-1 text-sm text-gray-500">
           保留单仪表盘布局；删除完整分析报告；PEG / ROE / 负债率 / PE×PB / CAGR 五项组成仪表盘评分。
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full border border-blue-700/50 bg-blue-900/20 px-3 py-1 text-blue-300">
+            当前数据库：{activeDbProfileLabel}
+          </span>
+          {settings?.valuecell_db_path_hint && (
+            <span className="rounded-full border border-gray-700 bg-gray-800 px-3 py-1 text-gray-400">
+              Path: {settings.valuecell_db_path_hint}
+            </span>
+          )}
+        </div>
       </div>
+
+      {isDemoProfile && (
+        <div className="rounded-xl border border-amber-800/40 bg-amber-900/15 px-4 py-3 text-sm text-amber-300">
+          当前处于数据库验证模式，建议优先使用与当前 demo profile 匹配的样本：
+          {activeDbProfile === 'tcom_demo' && ' TCOM'}
+          {activeDbProfile === 'brk_b_demo' && ' BRK'}
+          {activeDbProfile === 'pdd_demo' && ' PDD'}
+          。
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <div className="relative max-w-md flex-1">
@@ -274,12 +361,18 @@ export default function ValueCellPage() {
         <div className="flex flex-col items-center justify-center space-y-3 py-16 text-gray-500">
           <Loader2 className="h-10 w-10 animate-spin text-blue-400" />
           <p className="text-sm">正在获取 {symbol} 数据并分析，请稍候…</p>
-          <p className="text-xs text-gray-600">当前链路仍可能需要 10–20 秒。</p>
+          <p className="text-xs text-gray-600">当前链路优先读取本地数据库，通常会比旧实时链路更快。</p>
         </div>
       )}
 
       {result && !loading && (
         <div className="space-y-6">
+          {(result.db_profile || result.db_profile_label) && (
+            <div className="rounded-lg border border-blue-800/40 bg-blue-900/15 px-4 py-2 text-xs text-blue-300">
+              当前分析结果来自数据库 profile：
+              <span className="ml-1 font-medium">{result.db_profile_label ?? result.db_profile}</span>
+            </div>
+          )}
           <section className="rounded-2xl border border-gray-700 bg-gray-800/50 p-5 space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
@@ -343,6 +436,41 @@ export default function ValueCellPage() {
                 <div className="text-sm text-gray-400">无告警</div>
               )}
               </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-gray-700 bg-gray-800/50 p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-200">LLM 基本面分析</h2>
+              <p className="mt-1 text-xs text-gray-500">
+                基于当前结构化财务数据生成；当数据库缺数据时，会优先尝试自动抓取补数，否则退化为模型知识回答并说明局限。
+              </p>
+            </div>
+            <div className="rounded-xl border border-gray-700 bg-gray-900/40 p-4 text-sm leading-7">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                className="prose prose-invert prose-sm max-w-none"
+                components={{
+                  h2: (props: any) => <h2 className="text-lg font-semibold text-gray-100 mt-4 mb-2 first:mt-0" {...props} />,
+                  h3: (props: any) => <h3 className="text-base font-semibold text-gray-200 mt-3 mb-2" {...props} />,
+                  p: (props: any) => <p className="text-gray-300 leading-7 mb-3" {...props} />,
+                  ul: (props: any) => <ul className="list-disc list-inside text-gray-300 space-y-1 mb-3" {...props} />,
+                  ol: (props: any) => <ol className="list-decimal list-inside text-gray-300 space-y-1 mb-3" {...props} />,
+                  li: (props: any) => <li className="leading-7" {...props} />,
+                  strong: (props: any) => <strong className="font-semibold text-gray-100" {...props} />,
+                  em: (props: any) => <em className="italic text-gray-200" {...props} />,
+                  code: (props: any) => <code className="bg-gray-800 px-1.5 py-0.5 rounded text-sm text-blue-300" {...props} />,
+                  blockquote: (props: any) => <blockquote className="border-l-4 border-gray-600 pl-4 italic text-gray-400 my-3" {...props} />,
+                  table: (props: any) => <table className="w-full border-collapse my-3" {...props} />,
+                  thead: (props: any) => <thead className="bg-gray-800" {...props} />,
+                  tbody: (props: any) => <tbody {...props} />,
+                  tr: (props: any) => <tr className="border-b border-gray-700" {...props} />,
+                  th: (props: any) => <th className="px-3 py-2 text-left text-gray-200 font-semibold" {...props} />,
+                  td: (props: any) => <td className="px-3 py-2 text-gray-300" {...props} />,
+                }}
+              >
+                {result.investment_conclusion || '暂无分析内容'}
+              </ReactMarkdown>
             </div>
           </section>
 
